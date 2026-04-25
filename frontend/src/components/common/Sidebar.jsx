@@ -15,6 +15,7 @@ import {
   FolderIcon,
   UserIcon,
   ClockIcon,
+  ShieldCheckIcon,
 } from '@heroicons/react/24/outline';
 
 const Sidebar = () => {
@@ -43,6 +44,13 @@ const Sidebar = () => {
     { to: '/worker/follow-ups', icon: CalendarIcon, label: 'Follow-ups' },
   ];
 
+  const adminLinks = [
+    { to: '/admin-dashboard', icon: HomeIcon, label: 'Dashboard' },
+    { to: '/admin/users', icon: UserGroupIcon, label: 'Users' },
+    { to: '/admin/roles', icon: ShieldCheckIcon, label: 'Roles' },
+    { to: '/admin/permissions', icon: DocumentPlusIcon, label: 'Permissions' },
+  ];
+
   const commonLinks = [
     { to: '/doctors', icon: UserIcon, label: 'Doctors' },
     { to: '/lab', icon: BeakerIcon, label: 'Lab' },
@@ -55,6 +63,7 @@ const Sidebar = () => {
   if (role === 'creator') links = creatorLinks;
   else if (role === 'approver') links = approverLinks;
   else if (role === 'worker') links = workerLinks;
+  else if (role === 'admin') links = adminLinks;
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 hidden md:flex flex-col">

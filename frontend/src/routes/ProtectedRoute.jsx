@@ -4,12 +4,15 @@ import { useAuth } from '../context/AuthProvider';
 import React from 'react';
 
 const ProtectedRoute = ({ allowedRoles }) => {
-  const { user } = useAuth();
+  const { user, getDashboardPath } = useAuth();
 
   if (!user) return <Navigate to="/login" replace />;
+  
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to={`/${user.role}/dashboard`} replace />;
+    // Redirect to the user's own dashboard dynamically
+    return <Navigate to={getDashboardPath()} replace />;
   }
+  
   return <Outlet />;
 };
 

@@ -4,32 +4,83 @@ const { pool } = require('../config/db');
 
 const login = async (req, res) => {
   const { email, password } = req.body;
+  const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const deviceInfo = req.headers['user-agent'];
 
   try {
-    // 1. Check if user exists
-    const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    // 1. Check if user exists — join with roles to get role_name dynamically
+    const userResult = await pool.query(
+      `SELECT u.*, r.role_name 
+       FROM users u
+       LEFT JOIN roles r ON u.role_id = r.id
+       WHERE u.email = $1`,
+      [email]
+    );
     
     if (userResult.rows.length === 0) {
+      // Log failed attempt even if user doesn't exist (can use null user_id or log email)
+      await pool.query(
+        `INSERT INTO login_logs (email, ip_address, device_info, status) VALUES ($1, $2, $3, 'failed')`,
+        [email, ipAddress, deviceInfo]
+      );
       return res.status(404).json({ message: 'User not found' });
     }
 
     const user = userResult.rows[0];
 
-    // 2. Compare password
+    // 2. Check if user is active
+    if (user.is_active === false) {
+      await pool.query(
+        `INSERT INTO login_logs (user_id, email, ip_address, device_info, status) VALUES ($1, $2, $3, $4, 'failed')`,
+        [user.id, email, ipAddress, deviceInfo]
+      );
+      return res.status(403).json({ message: 'Your account has been deactivated. Please contact admin.' });
+    }
+
+    // 3. Compare password
     const isMatch = await bcrypt.compare(password, user.password);
     
     if (!isMatch) {
+      await pool.query(
+        `INSERT INTO login_logs (user_id, email, ip_address, device_info, status) VALUES ($1, $2, $3, $4, 'failed')`,
+        [user.id, email, ipAddress, deviceInfo]
+      );
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // 3. Generate JWT
+    // Log successful login
+    await pool.query(
+      `INSERT INTO login_logs (user_id, email, ip_address, device_info, status) VALUES ($1, $2, $3, $4, 'success')`,
+      [user.id, email, ipAddress, deviceInfo]
+    );
+
+    // Update last_login timestamp
+    await pool.query(
+      `UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1`,
+      [user.id]
+    );
+
+    // 4. Get the role_name from DB (dynamic, not hardcoded)
+    const roleName = user.role_name || user.role || 'employee';
+
+    // 5. Fetch user permissions
+    let permissions = [];
+    if (user.role_id) {
+      const permResult = await pool.query(
+        'SELECT module, can_view, can_create, can_edit, can_delete FROM role_permissions WHERE role_id = $1',
+        [user.role_id]
+      );
+      permissions = permResult.rows;
+    }
+
+    // 6. Generate JWT with role info
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      { id: user.id, email: user.email, role: roleName, role_id: user.role_id },
       process.env.JWT_SECRET,
       { expiresIn: '1d' }
     );
 
-    // 4. Send response
+    // 7. Send response with dynamic role data
     res.status(200).json({
       message: 'Login successful',
       token,
@@ -37,7 +88,10 @@ const login = async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role,
+        role: roleName,
+        role_id: user.role_id,
+        is_active: user.is_active,
+        permissions,
       },
     });
 
@@ -108,4 +162,3 @@ const resetPassword = async (req, res) => {
 };
 
 module.exports = { login, forgotPassword, resetPassword };
-

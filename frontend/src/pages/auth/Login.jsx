@@ -5,18 +5,14 @@ import api from '../../api/api';
 import { 
   EnvelopeIcon, 
   LockClosedIcon, 
-  UserGroupIcon, 
   CheckCircleIcon,
   ShieldCheckIcon,
-  BriefcaseIcon,
-  UserIcon
 } from '@heroicons/react/24/outline';
 
 const Login = () => {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('creator');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const { login } = useAuth();
@@ -32,15 +28,27 @@ const Login = () => {
       
       const { token, user } = response.data;
 
-      // Store in localStorage
+      // Store token in localStorage
       localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(user));
 
-      // Update Auth context
+      // Update Auth context (includes permissions)
       login(user);
 
-      // Redirect to dashboard
-      navigate(`/${user.role}/dashboard`);
+      // Dynamic redirect based on role from database
+      const role = user.role?.toLowerCase();
+      const dashboardMap = {
+        admin: '/admin-dashboard',
+        manager: '/manager-dashboard',
+        employee: '/employee-dashboard',
+        hr: '/hr-dashboard',
+        sales: '/sales-dashboard',
+        creator: '/creator/dashboard',
+        approver: '/approver/dashboard',
+        worker: '/worker/dashboard',
+      };
+
+      const redirectPath = dashboardMap[role] || `/${role}/dashboard`;
+      navigate(redirectPath);
     } catch (err) {
       console.error('Login error:', err);
       setError(err.response?.data?.message || 'Something went wrong. Please try again.');
@@ -48,13 +56,6 @@ const Login = () => {
       setIsLoading(false);
     }
   };
-
-
-  const roles = [
-    { id: 'creator', name: 'Creator', icon: UserIcon, desc: 'Manage medical records' },
-    { id: 'approver', name: 'Approver', icon: ShieldCheckIcon, desc: 'Review & verify data' },
-    { id: 'worker', name: 'Worker', icon: BriefcaseIcon, desc: 'Daily operations' },
-  ];
 
   return (
     <div className="min-h-screen w-full flex overflow-hidden bg-slate-50 relative">
@@ -78,10 +79,10 @@ const Login = () => {
             </div>
             <h1 className="text-4xl font-bold text-white tracking-tight">Medbridge CRM</h1>
           </div>
-          <p className="text-blue-200/60 text-sm font-medium tracking-widest uppercase mb-4">Customer Relationship Management System</p>
+          <p className="text-blue-200/60 text-sm font-medium tracking-widest uppercase mb-4">Advanced Healthcare & Lead Management System</p>
           
           <h2 className="text-5xl font-extrabold text-white leading-tight mb-6">
-            The next generation of <span className="text-blue-200">Patient Management.</span>
+            The Next Generation of <span className="text-blue-200">Patient & Sales Management.</span>
           </h2>
           <p className="text-xl text-blue-100/80 leading-relaxed mb-8">
             Streamline your clinical workflows, manage patient data securely, and improve care coordination with our unified platform.
@@ -114,7 +115,7 @@ const Login = () => {
             <ShieldCheckIcon className="w-8 h-8 text-blue-600" />
             <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Medbridge CRM</h1>
           </div>
-          <p className="lg:hidden text-center text-slate-500 text-xs font-medium uppercase tracking-wider mb-6">Customer Relationship Management System</p>
+          <p className="lg:hidden text-center text-slate-500 text-xs font-medium uppercase tracking-wider mb-6">Advanced Healthcare & Lead Management System</p>
 
           <div className="mb-10">
             <h2 className="text-3xl font-bold text-slate-900 mb-2">Welcome Back</h2>
@@ -132,7 +133,6 @@ const Login = () => {
             )}
 
             <div className="space-y-2">
-
               <label className="text-sm font-semibold text-slate-700 ml-1">Email Address</label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-blue-600 transition-colors">
@@ -170,31 +170,6 @@ const Login = () => {
               </div>
             </div>
 
-            <div className="space-y-3">
-              <label className="text-sm font-semibold text-slate-700 ml-1">Account Type</label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {roles.map((r) => {
-                  const Icon = r.icon;
-                  const isActive = role === r.id;
-                  return (
-                    <button
-                      key={r.id}
-                      type="button"
-                      onClick={() => setRole(r.id)}
-                      className={`flex flex-col items-center justify-center p-3 rounded-2xl border-2 transition-all duration-300 ${
-                        isActive 
-                          ? 'border-blue-600 bg-blue-50 text-blue-600 shadow-sm' 
-                          : 'border-slate-100 bg-white text-slate-500 hover:border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      <Icon className={`w-6 h-6 mb-1 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
-                      <span className="text-xs font-bold uppercase tracking-wider">{r.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
             <div className="flex items-center space-x-2 ml-1">
               <input type="checkbox" id="remember" className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300" />
               <label htmlFor="remember" className="text-sm text-slate-600">Keep me signed in</label>
@@ -226,7 +201,7 @@ const Login = () => {
               <CheckCircleIcon className="w-4 h-4 text-amber-600" />
             </div>
             <p className="text-xs text-amber-800 leading-relaxed">
-              <strong>Demo Mode:</strong> You can enter any email and password to explore the system. Select a role to see different dashboard views.
+              <strong>Secure Login:</strong> Your role and permissions are automatically detected from your account. No manual role selection needed.
             </p>
           </div>
         </div>

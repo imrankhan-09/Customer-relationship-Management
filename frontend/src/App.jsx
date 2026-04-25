@@ -12,6 +12,11 @@ import Loader from './components/common/Loader';
 const ForgotPassword = lazy(() => import('./pages/auth/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/auth/ResetPassword'));
 
+// Admin pages
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
+const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
+const RoleManagement = lazy(() => import('./pages/admin/RoleManagement'));
+const PermissionManagement = lazy(() => import('./pages/admin/PermissionManagement'));
 
 // Lazy load pages
 const CreatorDashboard = lazy(() => import('./pages/creator/CreatorDashboard'));
@@ -64,6 +69,16 @@ function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/" element={<Navigate to="/login" replace />} />
+
+            {/* Admin Routes */}
+            <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+              <Route element={<Layout />}>
+                <Route path="/admin-dashboard" element={<AdminDashboard />} />
+                <Route path="/admin/users" element={<UserManagement />} />
+                <Route path="/admin/roles" element={<RoleManagement />} />
+                <Route path="/admin/permissions" element={<PermissionManagement />} />
+              </Route>
+            </Route>
 
 
             {/* Creator Routes */}
