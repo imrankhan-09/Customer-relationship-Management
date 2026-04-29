@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../api/api';
+import { useNotification } from '../../context/NotificationContext';
 import { 
   UserIcon, 
   PhoneIcon, 
@@ -19,6 +20,7 @@ import {
 const EditLead = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { showSuccess, showError } = useNotification();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [type, setType] = useState('doctor');
@@ -51,7 +53,7 @@ const EditLead = () => {
         setRejectionReason(lead.rejection_reason || '');
       } catch (err) {
         console.error('Error fetching lead:', err);
-        alert('Failed to load lead data.');
+        showError('Failed to load lead data');
         navigate('/creator/my-leads');
       } finally {
         setIsLoading(false);
@@ -155,10 +157,11 @@ const EditLead = () => {
         type,
         extra_data: extraData
       });
+      showSuccess('Lead Updated Successfully');
       navigate('/creator/my-leads');
     } catch (err) {
       console.error('Error updating lead:', err);
-      alert('Failed to update lead.');
+      showError(err?.response?.data?.message || 'Failed to update lead');
     } finally {
       setIsSaving(false);
     }

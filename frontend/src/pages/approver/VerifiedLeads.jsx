@@ -14,7 +14,7 @@ import {
   ArrowTrendingUpIcon
 } from '@heroicons/react/24/outline';
 
-const VerifiedLeads = () => {
+const ApprovedLeads = () => {
   const navigate = useNavigate();
   const [leads, setLeads] = useState([]);
   const [filteredLeads, setFilteredLeads] = useState([]);
@@ -26,11 +26,11 @@ const VerifiedLeads = () => {
     try {
       const response = await api.get('/leads');
       // Filter only approved/converted leads for this page
-      const verifiedLeads = response.data.filter(l => l.status === 'approved' || l.status === 'assigned' || l.status === 'converted');
-      setLeads(verifiedLeads);
-      setFilteredLeads(verifiedLeads);
+      const approvedLeads = response.data.filter(l => l.status === 'approved' || l.status === 'assigned' || l.status === 'converted');
+      setLeads(approvedLeads);
+      setFilteredLeads(approvedLeads);
     } catch (err) {
-      console.error('Error fetching verified leads:', err);
+      console.error('Error fetching approved leads:', err);
     } finally {
       setIsLoading(false);
     }
@@ -170,4 +170,4 @@ const VerifiedLeads = () => {
   );
 };
 
-export default VerifiedLeads;
+export default ApprovedLeads;

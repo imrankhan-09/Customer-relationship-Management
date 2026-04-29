@@ -58,10 +58,14 @@ const createTables = async () => {
     const createLeadsQuery = `
       CREATE TABLE IF NOT EXISTS leads (
         id SERIAL PRIMARY KEY,
-        name VARCHAR(150) NOT NULL,
-        phone VARCHAR(20),
-        email VARCHAR(150),
+        name VARCHAR(150) NOT NULL UNIQUE,
+        phone VARCHAR(20) UNIQUE,
+        email VARCHAR(150) UNIQUE,
         type VARCHAR(50),
+        CONSTRAINT leads_phone_format_check
+          CHECK (phone IS NULL OR phone ~ '^[0-9]{10}$'),
+        CONSTRAINT leads_email_format_check
+          CHECK (email IS NULL OR email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'),
         
         status VARCHAR(50) DEFAULT 'pending' 
           CHECK (status IN ('pending', 'approved', 'rejected', 'converted')),

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/api';
+import { useNotification } from '../../context/NotificationContext';
 import { 
   UserIcon, 
   PhoneIcon, 
@@ -16,7 +17,10 @@ import {
 
 const CreateLead = () => {
   const navigate = useNavigate();
+  const { showSuccess, showError } = useNotification();
   const [isLoading, setIsLoading] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [type, setType] = useState('doctor');
   const [formData, setFormData] = useState({
     name: '',
@@ -106,7 +110,10 @@ const CreateLead = () => {
   const [createdLead, setCreatedLead] = useState(null);
 
   const handleBasicChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+    setFieldErrors((prev) => ({ ...prev, [name]: '' }));
+    if (submitError) setSubmitError('');
   };
 
   const handleExtraChange = (e) => {
@@ -116,18 +123,46 @@ const CreateLead = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitError('');
+
+    const nextErrors = {};
+    const trimmedName = formData.name.trim();
+    const trimmedPhone = formData.phone.trim();
+    const trimmedEmail = formData.email.trim();
+
+    if (!trimmedName) {
+      nextErrors.name = 'Name is required';
+    }
+    if (trimmedPhone && !/^[0-9]{10}$/.test(trimmedPhone)) {
+      nextErrors.phone = 'Invalid phone';
+    }
+    if (trimmedEmail && !/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(trimmedEmail)) {
+      nextErrors.email = 'Invalid email';
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const response = await api.post('/leads', {
         ...formData,
+        name: trimmedName,
+        phone: trimmedPhone,
+        email: trimmedEmail,
         type,
         extra_data: extraData
       });
       setCreatedLead(response.data);
+      showSuccess('Lead Created Successfully');
       setIsSuccess(true);
     } catch (err) {
       console.error('Error creating lead:', err);
-      alert('Failed to create lead. Please try again.');
+      const msg = err?.response?.data?.message || 'Failed to create lead. Please try again.';
+      setSubmitError(msg);
+      showError(msg);
     } finally {
       setIsLoading(false);
     }
@@ -222,6 +257,11 @@ const CreateLead = () => {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
+        {submitError && (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+            {submitError}
+          </div>
+        )}
         {/* Type Selection */}
         <div className="glass-card rounded-3xl p-8">
           <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
@@ -277,6 +317,7 @@ const CreateLead = () => {
                   placeholder="Lead display name"
                 />
               </div>
+              {fieldErrors.name && <p className="text-xs font-semibold text-rose-600">{fieldErrors.name}</p>}
             </div>
             <div className="space-y-2">
               <label className="text-sm font-bold text-slate-700 ml-1">Phone Number</label>
@@ -293,6 +334,7 @@ const CreateLead = () => {
                   placeholder="+91 00000 00000"
                 />
               </div>
+              {fieldErrors.phone && <p className="text-xs font-semibold text-rose-600">{fieldErrors.phone}</p>}
             </div>
             <div className="space-y-2">
               <label className="text-sm font-bold text-slate-700 ml-1">Email Address</label>
@@ -309,6 +351,7 @@ const CreateLead = () => {
                   placeholder="contact@email.com"
                 />
               </div>
+              {fieldErrors.email && <p className="text-xs font-semibold text-rose-600">{fieldErrors.email}</p>}
             </div>
           </div>
         </div>

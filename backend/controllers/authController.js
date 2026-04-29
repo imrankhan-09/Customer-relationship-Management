@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { pool } = require('../config/db');
 
 const login = async (req, res) => {
+  console.log('--- LOGIN REQUEST RECEIVED ---');
   const { email, password } = req.body;
   const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   const deviceInfo = req.headers['user-agent'];
@@ -63,14 +64,44 @@ const login = async (req, res) => {
     // 4. Get the role_name from DB (dynamic, not hardcoded)
     const roleName = user.role_name || user.role || 'employee';
 
-    // 5. Fetch user permissions
+    console.log("Login hit");
+    console.log("User ID:", user.id);
+    console.log("Role:", roleName);
+
+    // 5. Fetch effective permissions (User-specific overrides > Role-based defaults)
+    const permissionQuery = `
+      WITH modules AS (
+        SELECT DISTINCT module FROM role_permissions WHERE role_id = $1
+        UNION
+        SELECT DISTINCT module FROM user_permissions WHERE user_id = $2
+      )
+      SELECT 
+        m.module,
+        COALESCE(up.can_view, rp.can_view, false) as can_view,
+        COALESCE(up.can_create, rp.can_create, false) as can_create,
+        COALESCE(up.can_edit, rp.can_edit, false) as can_edit,
+        COALESCE(up.can_delete, rp.can_delete, false) as can_delete
+      FROM modules m
+      LEFT JOIN role_permissions rp ON rp.module = m.module AND rp.role_id = $1
+      LEFT JOIN user_permissions up ON up.module = m.module AND up.user_id = $2
+    `;
+    
     let permissions = [];
-    if (user.role_id) {
-      const permResult = await pool.query(
-        'SELECT module, can_view, can_create, can_edit, can_delete FROM role_permissions WHERE role_id = $1',
-        [user.role_id]
-      );
-      permissions = permResult.rows;
+    try {
+      if (user.role_id) {
+        console.log(`Fetching permissions for RoleID: ${user.role_id}, UserID: ${user.id}`);
+        const permResult = await pool.query(permissionQuery, [user.role_id, user.id]);
+        permissions = permResult.rows;
+        console.log(`Permissions fetched: ${permissions.length}`);
+        if (permissions.length > 0) {
+          console.log("First permission module:", permissions[0].module);
+        }
+      } else {
+        console.log("No role_id for user, permissions empty. User data:", JSON.stringify({id: user.id, role: user.role, role_id: user.role_id}));
+      }
+    } catch (permError) {
+      console.error("Permission fetch error (non-fatal):", permError.message);
+      console.error(permError.stack);
     }
 
     // 6. Generate JWT with role info

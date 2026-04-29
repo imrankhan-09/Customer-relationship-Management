@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/api';
+import { useNotification } from '../../context/NotificationContext';
 import { 
   UserGroupIcon, 
   ArrowLeftIcon,
@@ -13,6 +14,7 @@ import {
 
 const AssignLeads = () => {
   const navigate = useNavigate();
+  const { showSuccess, showError } = useNotification();
   const [leads, setLeads] = useState([]);
   const [workers, setWorkers] = useState([]);
   const [selectedLeads, setSelectedLeads] = useState([]);
@@ -65,10 +67,10 @@ const AssignLeads = () => {
       setSelectedLeads([]);
       setSelectedWorker('');
       await fetchData(); // Refresh
-      alert('Leads assigned successfully!');
+      showSuccess('Leads Assigned Successfully');
     } catch (err) {
       console.error('Error assigning leads:', err);
-      alert('Failed to assign leads.');
+      showError('Failed to assign leads');
     } finally {
       setIsAssigning(false);
     }
@@ -105,7 +107,7 @@ const AssignLeads = () => {
         {/* Leads Selection */}
         <div className="lg:col-span-2 glass-card rounded-3xl p-8">
            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-slate-900">Verified Repository</h3>
+              <h3 className="text-lg font-bold text-slate-900">Approved Repository</h3>
               <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{leads.length} Records</span>
            </div>
            

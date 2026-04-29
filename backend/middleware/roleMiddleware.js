@@ -55,29 +55,38 @@ const checkPermission = (module, action) => {
         return res.status(401).json({ message: 'Not authorized' });
       }
 
-      const actionColumn = `can_${action}`;
-      const validActions = ['can_view', 'can_create', 'can_edit', 'can_delete'];
+      // Map semantic actions to database columns
+      const actionMap = {
+        'view': 'can_view',
+        'create': 'can_create',
+        'edit': 'can_edit',
+        'delete': 'can_delete',
+        'approve': 'can_edit'
+      };
+
+      const actionColumn = actionMap[action];
       
-      if (!validActions.includes(actionColumn)) {
+      if (!actionColumn) {
         return res.status(400).json({ message: `Invalid action: ${action}` });
       }
 
-      const result = await pool.query(
-        `SELECT rp.${actionColumn} as has_permission, r.role_name
-         FROM users u
-         JOIN roles r ON u.role_id = r.id
-         JOIN role_permissions rp ON rp.role_id = r.id AND rp.module = $1
-         WHERE u.id = $2 AND u.is_active = true`,
-        [module, req.user.id]
-      );
-
-      if (result.rows.length === 0) {
-        return res.status(403).json({ 
-          message: `No permissions configured for module: ${module}` 
-        });
+      // Admin bypass - using role from JWT for performance
+      if (req.user.role === 'admin') {
+        return next();
       }
 
-      if (!result.rows[0].has_permission) {
+      const query = `
+        SELECT 
+          COALESCE(up.${actionColumn}, rp.${actionColumn}, false) as has_permission
+        FROM users u
+        LEFT JOIN role_permissions rp ON rp.role_id = u.role_id AND rp.module = $1
+        LEFT JOIN user_permissions up ON up.user_id = u.id AND up.module = $1
+        WHERE u.id = $2 AND u.is_active = true
+      `;
+
+      const result = await pool.query(query, [module, req.user.id]);
+
+      if (result.rows.length === 0 || !result.rows[0].has_permission) {
         return res.status(403).json({ 
           message: `Access denied. You don't have '${action}' permission for '${module}'` 
         });

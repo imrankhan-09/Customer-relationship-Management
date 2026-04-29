@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api/api';
+import { useNotification } from '../../context/NotificationContext';
 
 const PermissionManagement = () => {
+  const { showSuccess, showError } = useNotification();
   const [roles, setRoles] = useState([]);
   const [selectedRole, setSelectedRole] = useState('');
   const [permissions, setPermissions] = useState([]);
@@ -9,7 +11,7 @@ const PermissionManagement = () => {
   const [saving, setSaving] = useState(false);
 
   // Define the standard modules
-  const ALL_MODULES = ['users', 'leads', 'opportunities', 'activities'];
+  const ALL_MODULES = ['users', 'leads', 'approved_leads', 'opportunities', 'activities', 'reports'];
 
   useEffect(() => {
     fetchRoles();
@@ -75,10 +77,10 @@ const PermissionManagement = () => {
       await api.put(`/admin/permissions/${selectedRole}`, {
         permissions: permissions
       });
-      alert('Permissions saved successfully!');
+      showSuccess('Permissions saved successfully!');
     } catch (err) {
       console.error('Error saving permissions:', err);
-      alert(err.response?.data?.message || 'Error saving permissions');
+      showError(err.response?.data?.message || 'Error saving permissions');
     } finally {
       setSaving(false);
     }

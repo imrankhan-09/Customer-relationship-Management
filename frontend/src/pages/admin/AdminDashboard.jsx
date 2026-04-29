@@ -1,20 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/api';
+import LoginHistoryModal from './LoginHistoryModal';
 import {
   UsersIcon,
-  DocumentTextIcon,
   ShieldCheckIcon,
   UserPlusIcon,
-  ChartBarIcon,
   ArrowTrendingUpIcon,
-  ClockIcon
+  ClockIcon,
+  UserMinusIcon,
+  CheckBadgeIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 
 const AdminDashboard = () => {
   const [stats, setStats] = useState(null);
-  const [loginStats, setLoginStats] = useState(null);
-  const [recentLogins, setRecentLogins] = useState([]);
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState(null);
+  const [selectedUserName, setSelectedUserName] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -24,14 +28,9 @@ const AdminDashboard = () => {
 
   const fetchData = async () => {
     try {
-      const [statsRes, loginStatsRes, loginsRes] = await Promise.all([
-        api.get('/admin/dashboard-stats'),
-        api.get('/admin/login-stats'),
-        api.get('/admin/recent-logins')
-      ]);
+      const statsRes = await api.get('/admin/dashboard-stats');
       setStats(statsRes.data);
-      setLoginStats(loginStatsRes.data);
-      setRecentLogins(loginsRes.data);
+      setRecentActivity(statsRes.data?.recent_activity || statsRes.data?.recentActivity || []);
     } catch (err) {
       console.error('Dashboard data error:', err);
       setError(err.response?.data?.message || 'Failed to load dashboard data');
@@ -59,44 +58,72 @@ const AdminDashboard = () => {
   const statCards = [
     {
       title: 'Total Users',
-      value: stats?.totalUsers || 0,
+      value: stats?.total_users ?? stats?.totalUsers ?? 0,
       icon: UsersIcon,
       color: 'bg-blue-500',
       lightColor: 'bg-blue-50',
       textColor: 'text-blue-600',
-      link: '/admin/users',
+      link: '/admin/users?status=all',
     },
     {
       title: 'Active Users',
-      value: stats?.activeUsers || 0,
+      value: stats?.active_users ?? stats?.activeUsers ?? 0,
       icon: ArrowTrendingUpIcon,
       color: 'bg-emerald-500',
       lightColor: 'bg-emerald-50',
       textColor: 'text-emerald-600',
+      link: '/admin/users?status=active'
     },
     {
-      title: 'Total Logins',
-      value: loginStats?.totalLogins || 0,
-      icon: DocumentTextIcon,
+      title: 'Deactivated Users',
+      value: stats?.deactivated_users ?? stats?.deactivatedUsers ?? 0,
+      icon: UserMinusIcon,
       color: 'bg-violet-500',
       lightColor: 'bg-violet-50',
       textColor: 'text-violet-600',
+      link: '/admin/users?status=inactive'
     },
     {
-      title: 'Failed Attempts',
-      value: loginStats?.failedLogins || 0,
+      title: 'Total Leads',
+      value: stats?.total_leads ?? stats?.totalLeads ?? 0,
       icon: ShieldCheckIcon,
+      color: 'bg-cyan-500',
+      lightColor: 'bg-cyan-50',
+      textColor: 'text-cyan-600',
+      link: '/admin/leads?status=all'
+    },
+    {
+      title: 'Converted Leads',
+      value: stats?.converted_leads ?? stats?.convertedLeads ?? 0,
+      icon: CheckBadgeIcon,
+      color: 'bg-indigo-500',
+      lightColor: 'bg-indigo-50',
+      textColor: 'text-indigo-600',
+      link: '/admin/leads?status=converted'
+    },
+    {
+      title: 'Failed Login Attempts',
+      value: stats?.failed_login_attempts ?? stats?.failedLoginAttempts ?? 0,
+      icon: ExclamationTriangleIcon,
       color: 'bg-rose-500',
       lightColor: 'bg-rose-50',
       textColor: 'text-rose-600',
+      link: '/admin/users?status=all'
     },
   ];
 
   const formatTime = (timestamp) => {
+    if (!timestamp) return 'Never';
     return new Date(timestamp).toLocaleString('en-US', {
       day: 'numeric', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit'
     });
+  };
+
+  const openHistoryModal = (activity) => {
+    setSelectedUserId(activity.id);
+    setSelectedUserName(activity.user_name || 'Unknown User');
+    setIsHistoryModalOpen(true);
   };
 
   return (
@@ -126,7 +153,7 @@ const AdminDashboard = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {statCards.map((card, idx) => {
           const Icon = card.icon;
           const Wrapper = card.link ? Link : 'div';
@@ -152,74 +179,40 @@ const AdminDashboard = () => {
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Role Distribution */}
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
-          <div className="flex items-center gap-2 mb-4">
-            <ChartBarIcon className="w-5 h-5 text-blue-600" />
-            <h2 className="text-lg font-semibold text-gray-900">Role Distribution</h2>
-          </div>
-          <div className="space-y-3">
-            {stats?.roleStats?.map((role, idx) => {
-              const total = stats.totalUsers || 1;
-              const percentage = Math.round((parseInt(role.count) / total) * 100);
-              const colors = [
-                'bg-blue-500', 'bg-emerald-500', 'bg-violet-500', 'bg-amber-500',
-                'bg-rose-500', 'bg-cyan-500', 'bg-pink-500', 'bg-indigo-500',
-              ];
-              return (
-                <div key={idx}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-700 capitalize">{role.role_name}</span>
-                    <span className="text-sm text-gray-500">{role.count} users ({percentage}%)</span>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div
-                      className={`h-2 rounded-full transition-all duration-500 ${colors[idx % colors.length]}`}
-                      style={{ width: `${Math.max(percentage, 2)}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-            {(!stats?.roleStats || stats.roleStats.length === 0) && (
-              <p className="text-sm text-gray-400 text-center py-4">No role data available</p>
-            )}
-          </div>
+      <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+        <div className="flex items-center gap-2 mb-4">
+          <ClockIcon className="w-5 h-5 text-blue-600" />
+          <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
         </div>
-
-        {/* Recent Logins */}
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <ClockIcon className="w-5 h-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Recent Logins</h2>
-            </div>
-          </div>
-          <div className="space-y-3">
-            {recentLogins.map((log) => (
-              <div
-                key={log.id}
-                className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100"
-              >
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{log.name || log.email}</p>
-                  <p className="text-xs text-gray-500">{formatTime(log.login_time)}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">{log.ip_address}</span>
-                  <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${log.status === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                    {log.status}
-                  </span>
-                </div>
+        <div className="space-y-3">
+          {recentActivity.map((item) => (
+            <div
+              key={item.id}
+              onClick={() => openHistoryModal(item)}
+              className="p-4 rounded-xl bg-gray-50 border border-gray-100 flex flex-col md:flex-row md:items-center md:justify-between gap-2 cursor-pointer hover:bg-gray-100 transition"
+            >
+              <div>
+                <p className="text-sm font-semibold text-gray-900">{item.user_name || 'Unknown User'}</p>
+                <p className="text-xs text-gray-600 capitalize">{item.role_name || 'unknown'} - {item.action || 'activity'}</p>
               </div>
-            ))}
-            {recentLogins.length === 0 && (
-              <p className="text-sm text-gray-400 text-center py-4">No recent logins</p>
-            )}
-          </div>
+              <div className="text-xs text-gray-500">
+                <p>Time: {formatTime(item.action_time)}</p>
+                <p>Last Seen: {formatTime(item.last_seen)}</p>
+              </div>
+            </div>
+          ))}
+          {recentActivity.length === 0 && (
+            <p className="text-sm text-gray-400 text-center py-4">No recent activity</p>
+          )}
         </div>
       </div>
+
+      <LoginHistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
+        userId={selectedUserId}
+        userName={selectedUserName}
+      />
     </div>
   );
 };

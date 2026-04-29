@@ -97,7 +97,7 @@ const ApproverDashboard = () => {
 
   const stats = [
     { name: 'Pending Approvals', value: statsData.pending, icon: ClockIcon, color: 'text-amber-600', bg: 'bg-amber-100/50' },
-    { name: 'Verified Leads', value: statsData.approved, icon: ShieldCheckIcon, color: 'text-emerald-600', bg: 'bg-emerald-100/50' },
+    { name: 'Approved Leads', value: statsData.approved, icon: ShieldCheckIcon, color: 'text-emerald-600', bg: 'bg-emerald-100/50' },
     { name: 'Total Assigned', value: statsData.assigned, icon: UserGroupIcon, color: 'text-indigo-600', bg: 'bg-indigo-100/50' },
     { name: 'Total Rejected', value: statsData.rejected, icon: XCircleIcon, color: 'text-rose-600', bg: 'bg-rose-100/50' },
   ];
@@ -213,7 +213,7 @@ const ApproverDashboard = () => {
               </div>
 
               <div className="space-y-4">
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest border-b pb-2">Verification Details</h3>
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest border-b pb-2">Approval Details</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {Object.entries(selectedLead.extra_data || {}).map(([key, value]) => (
                     <div key={key} className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
@@ -236,7 +236,7 @@ const ApproverDashboard = () => {
                       <textarea 
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
-                        placeholder="Add internal verification notes..."
+                        placeholder="Add internal approval notes..."
                         className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all resize-none text-sm min-h-[80px]"
                       />
                    </div>
@@ -292,7 +292,7 @@ const ApproverDashboard = () => {
                   className="px-8 py-2.5 bg-emerald-600 text-white font-bold rounded-xl shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex items-center gap-2"
                 >
                   <ShieldCheckIcon className="w-5 h-5" />
-                  {selectedWorkerId ? 'Approve & Assign' : 'Approve & Verify'}
+                  {selectedWorkerId ? 'Approve & Assign' : 'Approve'}
                 </button>
               )}
             </div>
@@ -314,7 +314,7 @@ const ApproverDashboard = () => {
         <div className="flex items-center gap-3">
            <div className="px-6 py-3 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-100 flex items-center gap-3">
               <ShieldCheckIcon className="w-5 h-5" />
-              <span className="font-bold">Admin Verified</span>
+              <span className="font-bold">Admin Approved</span>
            </div>
         </div>
       </div>
@@ -350,7 +350,7 @@ const ApproverDashboard = () => {
           <div className="flex items-center justify-between mb-8">
             <div>
               <h3 className="text-xl font-bold text-slate-900">Weekly Approval Throughput</h3>
-              <p className="text-slate-500 text-sm font-medium uppercase tracking-wider text-[10px]">Verification Performance Trend</p>
+              <p className="text-slate-500 text-sm font-medium uppercase tracking-wider text-[10px]">Approval Performance Trend</p>
             </div>
             <div className="flex items-center gap-4">
                <div className="flex items-center gap-1.5">
@@ -413,7 +413,7 @@ const ApproverDashboard = () => {
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <span className="text-3xl font-black text-slate-900">{statsData.total}</span>
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-tighter">Verified</span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-tighter">Approved</span>
             </div>
           </div>
 

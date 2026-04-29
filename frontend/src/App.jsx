@@ -2,6 +2,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthProvider';
+import { NotificationProvider } from './context/NotificationContext';
 // import Login from './pages/auth/Login';
 import ProtectedRoute from './routes/ProtectedRoute';
 import Login from './pages/auth/Login';
@@ -12,11 +13,16 @@ import Loader from './components/common/Loader';
 const ForgotPassword = lazy(() => import('./pages/auth/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/auth/ResetPassword'));
 
+// Shared Pages
+const UnifiedDashboard = lazy(() => import('./pages/dashboard/UnifiedDashboard'));
+
 // Admin pages
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
+const AdminLeads = lazy(() => import('./pages/admin/AdminLeads'));
 const RoleManagement = lazy(() => import('./pages/admin/RoleManagement'));
 const PermissionManagement = lazy(() => import('./pages/admin/PermissionManagement'));
+const AdminReports = lazy(() => import('./pages/admin/AdminReports'));
 
 // Lazy load pages
 const CreatorDashboard = lazy(() => import('./pages/creator/CreatorDashboard'));
@@ -28,7 +34,7 @@ const EditLead = lazy(() => import('./pages/creator/EditLead'));
 const ApproverDashboard = lazy(() => import('./pages/approver/ApproverDashboard'));
 const AssignLeads = lazy(() => import('./pages/approver/AssignLeads'));
 const PendingLeads = lazy(() => import('./pages/approver/PendingLeads'));
-const VerifiedLeads = lazy(() => import('./pages/approver/VerifiedLeads'));
+const ApprovedLeads = lazy(() => import('./pages/approver/VerifiedLeads'));
 const ApproverAssignedLeads = lazy(() => import('./pages/approver/AssignedLeads'));
 const LeadTracking = lazy(() => import('./pages/approver/LeadTracking'));
 
@@ -62,7 +68,8 @@ const AppointmentReport = lazy(() => import('./pages/reports/AppointmentReport')
 function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
+      <NotificationProvider>
+        <AuthProvider>
         <Suspense fallback={<Loader />}>
           <Routes>
             <Route path="/login" element={<Login />} />
@@ -70,35 +77,44 @@ function App() {
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/" element={<Navigate to="/login" replace />} />
 
+            {/* Unified Dashboard (Accessible by any logged-in user) */}
+            <Route element={<ProtectedRoute />}>
+              <Route element={<Layout />}>
+                <Route path="/dashboard" element={<UnifiedDashboard />} />
+                <Route path="/leads/:id" element={<LeadDetails />} />
+              </Route>
+            </Route>
+
             {/* Admin Routes */}
             <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
               <Route element={<Layout />}>
                 <Route path="/admin-dashboard" element={<AdminDashboard />} />
                 <Route path="/admin/users" element={<UserManagement />} />
+                <Route path="/admin/leads" element={<AdminLeads />} />
                 <Route path="/admin/roles" element={<RoleManagement />} />
                 <Route path="/admin/permissions" element={<PermissionManagement />} />
+                <Route path="/admin/reports" element={<AdminReports />} />
               </Route>
             </Route>
 
 
             {/* Creator Routes */}
-            <Route element={<ProtectedRoute allowedRoles={['creator']} />}>
+            <Route element={<ProtectedRoute module="leads" action="create" />}>
               <Route element={<Layout />}>
-                <Route path="/creator/dashboard" element={<CreatorDashboard />} />
+                <Route path="/creator/dashboard" element={<UnifiedDashboard />} />
                 <Route path="/creator/create-lead" element={<CreateLead />} />
                 <Route path="/creator/my-leads" element={<MyLeads />} />
                 <Route path="/creator/edit-lead/:id" element={<EditLead />} />
-
               </Route>
             </Route>
 
             {/* Approver Routes */}
             <Route element={<ProtectedRoute allowedRoles={['approver']} />}>
               <Route element={<Layout />}>
-                <Route path="/approver/dashboard" element={<ApproverDashboard />} />
+                <Route path="/approver/dashboard" element={<UnifiedDashboard />} />
                 <Route path="/approver/assign-leads" element={<AssignLeads />} />
                 <Route path="/approver/pending-leads" element={<PendingLeads />} />
-                <Route path="/approver/verified-leads" element={<VerifiedLeads />} />
+                <Route path="/approver/verified-leads" element={<ApprovedLeads />} />
                 <Route path="/approver/assigned-leads" element={<ApproverAssignedLeads />} />
                 <Route path="/approver/track-lead/:id" element={<LeadTracking />} />
               </Route>
@@ -107,7 +123,7 @@ function App() {
             {/* Worker Routes */}
             <Route element={<ProtectedRoute allowedRoles={['worker']} />}>
               <Route element={<Layout />}>
-                <Route path="/worker/dashboard" element={<WorkerDashboard />} />
+                <Route path="/worker/dashboard" element={<UnifiedDashboard />} />
                 <Route path="/worker/assigned-leads" element={<AssignedLeads />} />
                 <Route path="/worker/follow-ups" element={<FollowUps />} />
                 <Route path="/worker/lead/:id" element={<LeadDetails />} />
@@ -133,8 +149,8 @@ function App() {
               </Route>
             </Route>
 
-            {/* Reports Modules (accessible by creator as well) */}
-            <Route element={<ProtectedRoute allowedRoles={['creator', 'approver', 'worker']} />}>
+            {/* Reports Modules */}
+            <Route element={<ProtectedRoute module="reports" action="view" />}>
               <Route element={<Layout />}>
                 <Route path="/reports/leads" element={<LeadsReport />} />
                 <Route path="/reports/sales" element={<SalesReport />} />
@@ -144,6 +160,7 @@ function App() {
           </Routes>
         </Suspense>
       </AuthProvider>
+      </NotificationProvider>
     </BrowserRouter>
   );
 }

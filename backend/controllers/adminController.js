@@ -1,6 +1,25 @@
 const bcrypt = require('bcrypt');
 const { pool } = require('../config/db');
 
+const ADMIN_SELF_MODIFY_ERROR = 'Admin cannot modify their own role or status';
+const ADMIN_ROLE_MODIFY_ERROR = 'Admin role cannot be modified';
+
+const getUserWithRole = async (userId) => {
+  const result = await pool.query(
+    `SELECT u.id, u.role_id, r.role_name
+     FROM users u
+     LEFT JOIN roles r ON u.role_id = r.id
+     WHERE u.id = $1`,
+    [userId]
+  );
+  return result.rows[0] || null;
+};
+
+const getRoleById = async (roleId) => {
+  const result = await pool.query('SELECT id, role_name FROM roles WHERE id = $1', [roleId]);
+  return result.rows[0] || null;
+};
+
 // ==================== USER MANAGEMENT ====================
 
 /**
@@ -30,8 +49,9 @@ const getAllUsers = async (req, res) => {
  * @access  Admin
  */
 const createUser = async (req, res) => {
-  const { name, email, password, role_id } = req.body;
+  const { name, email, password, role_id, permissions } = req.body;
 
+  const client = await pool.connect();
   try {
     // Validate required fields
     if (!name || !email || !password || !role_id) {
@@ -50,10 +70,12 @@ const createUser = async (req, res) => {
       return res.status(400).json({ message: 'Invalid role_id' });
     }
 
+    await client.query('BEGIN');
+
     const hashedPassword = await bcrypt.hash(password, 12);
     const roleName = roleCheck.rows[0].role_name;
 
-    const result = await pool.query(
+    const result = await client.query(
       `INSERT INTO users (name, email, password, role, role_id, is_active) 
        VALUES ($1, $2, $3, $4, $5, true)
        RETURNING id, name, email, role_id, is_active, created_at`,
@@ -63,10 +85,25 @@ const createUser = async (req, res) => {
     const user = result.rows[0];
     user.role_name = roleName;
 
+    // Handle custom permissions if provided
+    if (permissions && Array.isArray(permissions)) {
+      for (const perm of permissions) {
+        await client.query(
+          `INSERT INTO user_permissions (user_id, module, can_view, can_create, can_edit, can_delete)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [user.id, perm.module, perm.can_view || false, perm.can_create || false, perm.can_edit || false, perm.can_delete || false]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
     res.status(201).json({ message: 'User created successfully', user });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Create User Error:', error.message);
     res.status(500).json({ message: 'Server error creating user' });
+  } finally {
+    client.release();
   }
 };
 
@@ -77,26 +114,44 @@ const createUser = async (req, res) => {
  */
 const updateUser = async (req, res) => {
   const { id } = req.params;
-  const { name, email, role_id, is_active } = req.body;
+  const { name, email, role_id, is_active, permissions } = req.body;
+  const targetId = parseInt(id, 10);
+  const actorId = parseInt(req.user.id, 10);
 
+  const client = await pool.connect();
   try {
+    // Block admin self-modification through admin panel actions.
+    if (req.user.role === 'admin' && targetId === actorId) {
+      return res.status(403).json({ message: ADMIN_SELF_MODIFY_ERROR });
+    }
+
     // Check user exists
-    const userCheck = await pool.query('SELECT id FROM users WHERE id = $1', [id]);
-    if (userCheck.rows.length === 0) {
+    const targetUser = await getUserWithRole(targetId);
+    if (!targetUser) {
       return res.status(404).json({ message: 'User not found' });
+    }
+
+    // No one can change role of an admin user.
+    if (role_id && targetUser.role_name === 'admin') {
+      return res.status(403).json({ message: ADMIN_ROLE_MODIFY_ERROR });
     }
 
     // If role_id provided, verify it exists
     let roleName = null;
     if (role_id) {
-      const roleCheck = await pool.query('SELECT role_name FROM roles WHERE id = $1', [role_id]);
-      if (roleCheck.rows.length === 0) {
+      const roleCheck = await getRoleById(role_id);
+      if (!roleCheck) {
         return res.status(400).json({ message: 'Invalid role_id' });
       }
-      roleName = roleCheck.rows[0].role_name;
+      if (roleCheck.role_name === 'admin') {
+        return res.status(403).json({ message: ADMIN_ROLE_MODIFY_ERROR });
+      }
+      roleName = roleCheck.role_name;
     }
 
-    const result = await pool.query(
+    await client.query('BEGIN');
+
+    const result = await client.query(
       `UPDATE users SET
         name = COALESCE($1, name),
         email = COALESCE($2, email),
@@ -110,6 +165,24 @@ const updateUser = async (req, res) => {
     );
 
     const user = result.rows[0];
+    
+    // Handle custom permissions if provided
+    if (permissions && Array.isArray(permissions)) {
+      // Clear existing custom permissions first (or upsert)
+      // For simplicity, we'll clear and re-insert, but ON CONFLICT is safer
+      for (const perm of permissions) {
+        await client.query(
+          `INSERT INTO user_permissions (user_id, module, can_view, can_create, can_edit, can_delete)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (user_id, module) 
+           DO UPDATE SET can_view = $3, can_create = $4, can_edit = $5, can_delete = $6`,
+          [id, perm.module, perm.can_view || false, perm.can_create || false, perm.can_edit || false, perm.can_delete || false]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+
     // Fetch role_name for response
     if (user.role_id) {
       const r = await pool.query('SELECT role_name FROM roles WHERE id = $1', [user.role_id]);
@@ -118,11 +191,14 @@ const updateUser = async (req, res) => {
 
     res.status(200).json({ message: 'User updated successfully', user });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Update User Error:', error.message);
     if (error.code === '23505') {
       return res.status(409).json({ message: 'Email already in use' });
     }
     res.status(500).json({ message: 'Server error updating user' });
+  } finally {
+    client.release();
   }
 };
 
@@ -133,14 +209,16 @@ const updateUser = async (req, res) => {
  */
 const deleteUser = async (req, res) => {
   const { id } = req.params;
+  const targetId = parseInt(id, 10);
+  const actorId = parseInt(req.user.id, 10);
 
   try {
-    // Prevent self-deletion
-    if (parseInt(id) === req.user.id) {
-      return res.status(400).json({ message: 'Cannot delete your own account' });
+    // Prevent admin from deleting own account via admin actions.
+    if (req.user.role === 'admin' && targetId === actorId) {
+      return res.status(403).json({ message: ADMIN_SELF_MODIFY_ERROR });
     }
 
-    const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id, name, email', [id]);
+    const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id, name, email', [targetId]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'User not found' });
@@ -160,17 +238,19 @@ const deleteUser = async (req, res) => {
  */
 const toggleUserStatus = async (req, res) => {
   const { id } = req.params;
+  const targetId = parseInt(id, 10);
+  const actorId = parseInt(req.user.id, 10);
 
   try {
-    if (parseInt(id) === req.user.id) {
-      return res.status(400).json({ message: 'Cannot deactivate your own account' });
+    if (req.user.role === 'admin' && targetId === actorId) {
+      return res.status(403).json({ message: ADMIN_SELF_MODIFY_ERROR });
     }
 
     const result = await pool.query(
       `UPDATE users SET is_active = NOT is_active, updated_at = NOW() 
        WHERE id = $1 
        RETURNING id, name, email, is_active`,
-      [id]
+      [targetId]
     );
 
     if (result.rows.length === 0) {
@@ -198,25 +278,32 @@ const assignRole = async (req, res) => {
       return res.status(400).json({ message: 'user_id and role_id are required' });
     }
 
-    const roleCheck = await pool.query('SELECT role_name FROM roles WHERE id = $1', [role_id]);
-    if (roleCheck.rows.length === 0) {
+    const roleCheck = await getRoleById(role_id);
+    if (!roleCheck) {
       return res.status(400).json({ message: 'Invalid role_id' });
+    }
+    if (roleCheck.role_name === 'admin') {
+      return res.status(403).json({ message: ADMIN_ROLE_MODIFY_ERROR });
+    }
+
+    const targetUser = await getUserWithRole(user_id);
+    if (!targetUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    if (targetUser.role_name === 'admin') {
+      return res.status(403).json({ message: ADMIN_ROLE_MODIFY_ERROR });
     }
 
     const result = await pool.query(
       `UPDATE users SET role_id = $1, role = $2, updated_at = NOW() 
        WHERE id = $3 
        RETURNING id, name, email, role_id`,
-      [role_id, roleCheck.rows[0].role_name, user_id]
+      [role_id, roleCheck.role_name, user_id]
     );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'User not found' });
-    }
 
     res.status(200).json({
       message: 'Role assigned successfully',
-      user: { ...result.rows[0], role_name: roleCheck.rows[0].role_name }
+      user: { ...result.rows[0], role_name: roleCheck.role_name }
     });
   } catch (error) {
     console.error('Assign Role Error:', error.message);
@@ -288,6 +375,14 @@ const updateRole = async (req, res) => {
   const { role_name } = req.body;
 
   try {
+    const targetRole = await getRoleById(id);
+    if (!targetRole) {
+      return res.status(404).json({ message: 'Role not found' });
+    }
+    if (targetRole.role_name === 'admin') {
+      return res.status(403).json({ message: ADMIN_ROLE_MODIFY_ERROR });
+    }
+
     if (!role_name || role_name.trim() === '') {
       return res.status(400).json({ message: 'Role name is required' });
     }
@@ -301,10 +396,6 @@ const updateRole = async (req, res) => {
       'UPDATE roles SET role_name = $1, updated_at = NOW() WHERE id = $2 RETURNING id, role_name, updated_at',
       [sanitized, id]
     );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Role not found' });
-    }
 
     // Sync the role column in users table
     if (oldRole.rows.length > 0) {
@@ -330,6 +421,14 @@ const deleteRole = async (req, res) => {
   const { id } = req.params;
 
   try {
+    const targetRole = await getRoleById(id);
+    if (!targetRole) {
+      return res.status(404).json({ message: 'Role not found' });
+    }
+    if (targetRole.role_name === 'admin') {
+      return res.status(403).json({ message: ADMIN_ROLE_MODIFY_ERROR });
+    }
+
     // Check if any users are assigned this role
     const usersWithRole = await pool.query(
       'SELECT COUNT(*) as count FROM users WHERE role_id = $1',
@@ -346,10 +445,6 @@ const deleteRole = async (req, res) => {
       'DELETE FROM roles WHERE id = $1 RETURNING id, role_name',
       [id]
     );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Role not found' });
-    }
 
     res.status(200).json({ message: 'Role deleted successfully', role: result.rows[0] });
   } catch (error) {
@@ -428,6 +523,74 @@ const updateRolePermissions = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Get specific permissions for a user
+ * @route   GET /api/admin/user-permissions/:userId
+ * @access  Admin
+ */
+const getUserPermissions = async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const result = await pool.query(
+      `SELECT up.*, u.name as user_name 
+       FROM user_permissions up 
+       JOIN users u ON u.id = up.user_id 
+       WHERE up.user_id = $1 
+       ORDER BY up.module`,
+      [userId]
+    );
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error('Get User Permissions Error:', error.message);
+    res.status(500).json({ message: 'Server error fetching user permissions' });
+  }
+};
+
+/**
+ * @desc    Update specific permissions for a user
+ * @route   PUT /api/admin/user-permissions/:userId
+ * @access  Admin
+ */
+const updateUserPermissions = async (req, res) => {
+  const { userId } = req.params;
+  const { permissions } = req.body; // Array of { module, can_view, can_create, can_edit, can_delete }
+
+  try {
+    if (!permissions || !Array.isArray(permissions)) {
+      return res.status(400).json({ message: 'permissions array is required' });
+    }
+
+    // Verify user exists
+    const userCheck = await pool.query('SELECT id FROM users WHERE id = $1', [userId]);
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Upsert each permission
+    for (const perm of permissions) {
+      await pool.query(
+        `INSERT INTO user_permissions (user_id, module, can_view, can_create, can_edit, can_delete)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (user_id, module) 
+         DO UPDATE SET can_view = $3, can_create = $4, can_edit = $5, can_delete = $6`,
+        [userId, perm.module, perm.can_view, perm.can_create, perm.can_edit, perm.can_delete]
+      );
+    }
+
+    // Return updated permissions
+    const result = await pool.query(
+      'SELECT * FROM user_permissions WHERE user_id = $1 ORDER BY module',
+      [userId]
+    );
+
+    res.status(200).json({ message: 'User permissions updated successfully', permissions: result.rows });
+  } catch (error) {
+    console.error('Update User Permissions Error:', error.message);
+    res.status(500).json({ message: 'Server error updating user permissions' });
+  }
+};
+
 // ==================== DASHBOARD STATS ====================
 
 /**
@@ -437,47 +600,346 @@ const updateRolePermissions = async (req, res) => {
  */
 const getDashboardStats = async (req, res) => {
   try {
-    // Total users
-    const usersCount = await pool.query('SELECT COUNT(*) as count FROM users');
+    const [
+      usersCount,
+      activeUsers,
+      deactivatedUsers,
+      leadsCount,
+      convertedLeads,
+      failedLogins,
+      recentActivity
+    ] = await Promise.all([
+      pool.query('SELECT COUNT(*) as count FROM users'),
+      pool.query('SELECT COUNT(*) as count FROM users WHERE is_active = true'),
+      pool.query('SELECT COUNT(*) as count FROM users WHERE is_active = false'),
+      pool.query('SELECT COUNT(*) as count FROM leads'),
+      pool.query(`
+        SELECT COUNT(*) as count
+        FROM leads l
+        WHERE LOWER(COALESCE(l.status, '')) = 'converted'
+          OR LOWER(COALESCE(l.pipeline_stage, '')) = 'won'
+          OR EXISTS (
+            SELECT 1 FROM opportunities o
+            WHERE o.lead_id = l.id AND o.status = 'won'
+          )
+      `),
+      pool.query(`SELECT COUNT(*) as count FROM login_logs WHERE status = 'failed'`),
+      pool.query(`
+        SELECT
+          u.id,
+          u.name AS user_name,
+          COALESCE(r.role_name, u.role, 'unknown') AS role_name,
+          'login' AS action,
+          u.last_login AS action_time,
+          u.last_login AS last_seen
+        FROM users u
+        LEFT JOIN roles r ON r.id = u.role_id
+        WHERE u.last_login IS NOT NULL
+        ORDER BY u.last_login DESC
+        LIMIT 12
+      `)
+    ]);
 
-    // Total leads
-    const leadsCount = await pool.query('SELECT COUNT(*) as count FROM leads');
-
-    // Active users
-    const activeUsers = await pool.query('SELECT COUNT(*) as count FROM users WHERE is_active = true');
-
-    // Role-wise user stats
-    const roleStats = await pool.query(`
-      SELECT r.role_name, COUNT(u.id) as count
-      FROM roles r
-      LEFT JOIN users u ON u.role_id = r.id
-      GROUP BY r.id, r.role_name
-      ORDER BY count DESC
-    `);
-
-    // Total roles
-    const rolesCount = await pool.query('SELECT COUNT(*) as count FROM roles');
-
-    // Recent users (last 5)
-    const recentUsers = await pool.query(`
-      SELECT u.id, u.name, u.email, u.is_active, u.created_at, r.role_name
-      FROM users u
-      LEFT JOIN roles r ON u.role_id = r.id
-      ORDER BY u.created_at DESC
-      LIMIT 5
-    `);
+    const totalUsers = parseInt(usersCount.rows[0].count, 10) || 0;
+    const activeUsersCount = parseInt(activeUsers.rows[0].count, 10) || 0;
+    const deactivatedUsersCount = parseInt(deactivatedUsers.rows[0].count, 10) || 0;
+    const totalLeads = parseInt(leadsCount.rows[0].count, 10) || 0;
+    const convertedLeadsCount = parseInt(convertedLeads.rows[0].count, 10) || 0;
+    const failedLoginAttempts = parseInt(failedLogins.rows[0].count, 10) || 0;
 
     res.status(200).json({
-      totalUsers: parseInt(usersCount.rows[0].count),
-      totalLeads: parseInt(leadsCount.rows[0].count),
-      activeUsers: parseInt(activeUsers.rows[0].count),
-      totalRoles: parseInt(rolesCount.rows[0].count),
-      roleStats: roleStats.rows,
-      recentUsers: recentUsers.rows,
+      // Requested API keys
+      total_users: totalUsers,
+      active_users: activeUsersCount,
+      deactivated_users: deactivatedUsersCount,
+      total_leads: totalLeads,
+      converted_leads: convertedLeadsCount,
+      failed_login_attempts: failedLoginAttempts,
+      recent_activity: recentActivity.rows,
+
+      // Backward-compatible keys
+      totalUsers,
+      activeUsers: activeUsersCount,
+      deactivatedUsers: deactivatedUsersCount,
+      totalLeads,
+      convertedLeads: convertedLeadsCount,
+      failedLoginAttempts,
+      recentActivity: recentActivity.rows
     });
   } catch (error) {
     console.error('Dashboard Stats Error:', error.message);
     res.status(500).json({ message: 'Server error fetching dashboard stats' });
+  }
+};
+
+/**
+ * @desc    Get admin leads list with optional status filter
+ * @route   GET /api/admin/leads
+ * @access  Admin
+ */
+const getAdminLeads = async (req, res) => {
+  const { status = 'all' } = req.query;
+  const normalizedStatus = String(status).toLowerCase();
+
+  try {
+    let whereClause = '';
+    const values = [];
+
+    if (normalizedStatus !== 'all') {
+      if (normalizedStatus === 'converted') {
+        whereClause = `
+          WHERE (
+            LOWER(COALESCE(l.status, '')) = 'converted'
+            OR LOWER(COALESCE(l.pipeline_stage, '')) = 'won'
+            OR EXISTS (
+              SELECT 1 FROM opportunities o
+              WHERE o.lead_id = l.id AND o.status = 'won'
+            )
+          )
+        `;
+      } else {
+        whereClause = 'WHERE LOWER(COALESCE(l.status, \'\')) = $1';
+        values.push(normalizedStatus);
+      }
+    }
+
+    const result = await pool.query(
+      `
+        SELECT
+          l.id,
+          l.name,
+          l.phone,
+          l.email,
+          l.type,
+          l.status,
+          l.pipeline_stage,
+          l.created_at,
+          creator.name AS creator_name,
+          worker.name AS assigned_worker_name
+        FROM leads l
+        LEFT JOIN users creator ON creator.id = l.created_by
+        LEFT JOIN users worker ON worker.id = l.assigned_to
+        ${whereClause}
+        ORDER BY l.created_at DESC
+      `,
+      values
+    );
+
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error('Get Admin Leads Error:', error.message);
+    res.status(500).json({ message: 'Server error fetching leads' });
+  }
+};
+
+/**
+ * @desc    Get creator/worker performance report
+ * @route   GET /api/admin/performance-report
+ * @access  Admin
+ */
+const getPerformanceReport = async (req, res) => {
+  const { role, from, to } = req.query;
+  const selectedRole = ['creator', 'worker'].includes(role) ? role : 'creator';
+
+  try {
+    const activitiesCompletedColumn = await pool.query(
+      `SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_name = 'activities'
+          AND column_name = 'completed'
+      ) AS exists`
+    );
+    const hasCompletedColumn = activitiesCompletedColumn.rows[0]?.exists === true;
+
+    const fromDate = from ? new Date(from) : null;
+    const toDate = to ? new Date(to) : null;
+    if ((from && Number.isNaN(fromDate.getTime())) || (to && Number.isNaN(toDate.getTime()))) {
+      return res.status(400).json({ message: 'Invalid date range' });
+    }
+
+    let result;
+    if (selectedRole === 'creator') {
+      result = await pool.query(
+        `
+          SELECT
+            u.id AS user_id,
+            u.name AS user_name,
+            u.email,
+            r.role_name,
+            COUNT(l.id) AS total_leads,
+            COUNT(DISTINCT CASE
+              WHEN LOWER(COALESCE(l.status, '')) = 'converted' OR o.id IS NOT NULL
+              THEN l.id
+            END) AS conversion_or_completed,
+            COUNT(CASE
+              WHEN LOWER(COALESCE(l.status, '')) = 'rejected'
+              THEN 1
+            END) AS rejected_or_followups
+          FROM users u
+          JOIN roles r ON r.id = u.role_id
+          LEFT JOIN leads l ON l.created_by = u.id
+            AND ($2::timestamp IS NULL OR l.created_at >= $2::timestamp)
+            AND ($3::timestamp IS NULL OR l.created_at <= $3::timestamp)
+          LEFT JOIN opportunities o ON o.lead_id = l.id AND o.status = 'won'
+          WHERE r.role_name = $1
+          GROUP BY u.id, u.name, u.email, r.role_name
+          ORDER BY u.name ASC
+        `,
+        [selectedRole, fromDate, toDate]
+      );
+    } else {
+      result = await pool.query(
+        `
+          SELECT
+            u.id AS user_id,
+            u.name AS user_name,
+            u.email,
+            r.role_name,
+            COUNT(DISTINCT l.id) AS total_leads,
+            COUNT(CASE
+              WHEN ${hasCompletedColumn ? 'a.completed = true' : "LOWER(COALESCE(a.type, '')) LIKE '%complete%'"}
+              THEN 1
+            END) AS conversion_or_completed,
+            COUNT(CASE
+              WHEN a.next_followup IS NOT NULL
+              THEN 1
+            END) AS rejected_or_followups
+          FROM users u
+          JOIN roles r ON r.id = u.role_id
+          LEFT JOIN leads l ON l.assigned_to = u.id
+            AND ($2::timestamp IS NULL OR l.created_at >= $2::timestamp)
+            AND ($3::timestamp IS NULL OR l.created_at <= $3::timestamp)
+          LEFT JOIN activities a ON a.user_id = u.id
+            AND ($2::timestamp IS NULL OR a.created_at >= $2::timestamp)
+            AND ($3::timestamp IS NULL OR a.created_at <= $3::timestamp)
+          WHERE r.role_name = $1
+          GROUP BY u.id, u.name, u.email, r.role_name
+          ORDER BY u.name ASC
+        `,
+        [selectedRole, fromDate, toDate]
+      );
+    }
+
+    res.status(200).json({
+      role: selectedRole,
+      from: from || null,
+      to: to || null,
+      rows: result.rows
+    });
+  } catch (error) {
+    console.error('Performance Report Error:', error.message);
+    res.status(500).json({ message: 'Server error fetching performance report' });
+  }
+};
+
+/**
+ * @desc    Get admin reports (creator/worker performance)
+ * @route   GET /api/admin/reports
+ * @access  Admin
+ */
+const getAdminReports = async (req, res) => {
+  const { role = 'all', from, to } = req.query;
+  const normalizedRole = String(role).toLowerCase();
+
+  if (!['all', 'creator', 'worker'].includes(normalizedRole)) {
+    return res.status(400).json({ message: 'Invalid role filter' });
+  }
+
+  const fromDate = from ? new Date(from) : null;
+  const toDate = to ? new Date(to) : null;
+  if ((from && Number.isNaN(fromDate.getTime())) || (to && Number.isNaN(toDate.getTime()))) {
+    return res.status(400).json({ message: 'Invalid date range' });
+  }
+
+  try {
+    const completedColumnCheck = await pool.query(
+      `SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_name = 'activities'
+          AND column_name = 'completed'
+      ) AS exists`
+    );
+    const hasCompletedColumn = completedColumnCheck.rows[0]?.exists === true;
+
+    const creatorRowsResult = await pool.query(
+      `
+        SELECT
+          u.id AS user_id,
+          u.name,
+          u.email,
+          COUNT(l.id) AS leads_created,
+          COUNT(CASE WHEN LOWER(COALESCE(l.status, '')) = 'approved' THEN 1 END) AS approved_leads,
+          COUNT(CASE WHEN LOWER(COALESCE(l.status, '')) = 'rejected' THEN 1 END) AS rejected_leads,
+          COUNT(DISTINCT CASE
+            WHEN LOWER(COALESCE(l.status, '')) = 'converted' OR o.id IS NOT NULL
+            THEN l.id
+          END) AS converted_leads
+        FROM users u
+        JOIN roles r ON r.id = u.role_id AND r.role_name = 'creator'
+        LEFT JOIN leads l ON l.created_by = u.id
+          AND ($1::timestamp IS NULL OR l.created_at >= $1::timestamp)
+          AND ($2::timestamp IS NULL OR l.created_at <= $2::timestamp)
+        LEFT JOIN opportunities o ON o.lead_id = l.id AND o.status = 'won'
+        GROUP BY u.id, u.name, u.email
+        ORDER BY u.name ASC
+      `,
+      [fromDate, toDate]
+    );
+
+    const workerRowsResult = await pool.query(
+      `
+        SELECT
+          u.id AS user_id,
+          u.name,
+          u.email,
+          COUNT(DISTINCT l.id) AS assigned_leads,
+          COUNT(CASE
+            WHEN ${hasCompletedColumn ? 'a.completed = true' : "LOWER(COALESCE(a.type, '')) LIKE '%complete%'"}
+            THEN 1
+          END) AS completed_activities,
+          COUNT(CASE
+            WHEN a.next_followup IS NOT NULL
+             AND (a.next_followup > NOW())
+            THEN 1
+          END) AS pending_followups,
+          COUNT(DISTINCT CASE
+            WHEN LOWER(COALESCE(l.status, '')) = 'converted'
+              OR LOWER(COALESCE(l.pipeline_stage, '')) = 'won'
+              OR ow.id IS NOT NULL
+            THEN l.id
+          END) AS conversion_count
+        FROM users u
+        JOIN roles r ON r.id = u.role_id AND r.role_name = 'worker'
+        LEFT JOIN leads l ON l.assigned_to = u.id
+          AND ($1::timestamp IS NULL OR l.created_at >= $1::timestamp)
+          AND ($2::timestamp IS NULL OR l.created_at <= $2::timestamp)
+        LEFT JOIN activities a ON a.user_id = u.id
+          AND ($1::timestamp IS NULL OR a.created_at >= $1::timestamp)
+          AND ($2::timestamp IS NULL OR a.created_at <= $2::timestamp)
+        LEFT JOIN opportunities ow ON ow.lead_id = l.id AND ow.status = 'won'
+        GROUP BY u.id, u.name, u.email
+        ORDER BY u.name ASC
+      `,
+      [fromDate, toDate]
+    );
+
+    const creatorReports = normalizedRole === 'worker' ? [] : creatorRowsResult.rows;
+    const workerReports = normalizedRole === 'creator' ? [] : workerRowsResult.rows;
+
+    return res.status(200).json({
+      filters: {
+        role: normalizedRole,
+        from: from || null,
+        to: to || null
+      },
+      creatorReports,
+      workerReports
+    });
+  } catch (error) {
+    console.error('Admin Reports Error:', error.message);
+    return res.status(500).json({ message: 'Server error fetching admin reports' });
   }
 };
 
@@ -580,7 +1042,12 @@ module.exports = {
   deleteRole,
   getRolePermissions,
   updateRolePermissions,
+  getUserPermissions,
+  updateUserPermissions,
   getDashboardStats,
+  getAdminLeads,
+  getPerformanceReport,
+  getAdminReports,
   getUsersWithLastLogin,
   getUserLoginHistory,
   getLoginStats,

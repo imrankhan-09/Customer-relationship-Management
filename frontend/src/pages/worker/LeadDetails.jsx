@@ -16,6 +16,7 @@ import {
   ShoppingBagIcon
 } from '@heroicons/react/24/outline';
 import OpportunityManager from '../../components/sales/OpportunityManager';
+import { PIPELINE_STAGES, getStageLabel } from '../../utils/pipelineConstants';
 
 const LeadDetails = () => {
   const { id } = useParams();
@@ -28,8 +29,15 @@ const LeadDetails = () => {
   }, [id]);
 
   const fetchLeadDetails = async () => {
+    setIsLoading(true);
     try {
       const response = await api.get(`/leads/${id}`);
+      
+      if (!response.data || Object.keys(response.data).length === 0) {
+        setLead(null);
+        return;
+      }
+
       let leadData = response.data;
       
       // Parse extra_data if it's a string
@@ -44,6 +52,7 @@ const LeadDetails = () => {
       setLead(leadData);
     } catch (err) {
       console.error('Error fetching lead details:', err);
+      setLead(null);
     } finally {
       setIsLoading(false);
     }
@@ -60,9 +69,20 @@ const LeadDetails = () => {
 
   if (!lead) {
     return (
-      <div className="text-center py-20">
-        <p className="text-slate-500 font-bold">Lead not found or access denied.</p>
-        <button onClick={() => navigate(-1)} className="mt-4 text-blue-600 font-bold">Go Back</button>
+      <div className="flex flex-col items-center justify-center py-40 animate-in fade-in zoom-in duration-300">
+        <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mb-6 shadow-xl shadow-rose-100">
+           <IdentificationIcon className="w-10 h-10" />
+        </div>
+        <h2 className="text-2xl font-black text-slate-900 mb-2">Lead Not Found</h2>
+        <p className="text-slate-500 font-medium mb-8 max-w-xs text-center">
+          The requested lead might have been removed or you don't have permission to view it.
+        </p>
+        <button 
+          onClick={() => navigate(-1)} 
+          className="px-8 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-600 transition-all active:scale-95 shadow-xl shadow-slate-200"
+        >
+          Return to Dashboard
+        </button>
       </div>
     );
   }
@@ -86,7 +106,7 @@ const LeadDetails = () => {
         <div className="flex items-center gap-3">
            <StatusBadge status={lead.status} />
            <div className="px-4 py-1.5 bg-slate-100 text-slate-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-slate-200">
-              Stage: {lead.pipeline_stage}
+              Stage: {getStageLabel(lead.pipeline_stage)}
            </div>
         </div>
       </div>
@@ -182,13 +202,7 @@ const LeadDetails = () => {
                  Pipeline Roadmap
               </h3>
               <div className="space-y-6">
-                 {[
-                   { id: 'new', label: 'Lead Discovered', icon: AcademicCapIcon },
-                   { id: 'contacted', label: 'Initial Contact', icon: PhoneIcon },
-                   { id: 'demo', label: 'Product Demo', icon: ArrowLeftIcon },
-                   { id: 'negotiation', label: 'Negotiation', icon: BriefcaseIcon },
-                   { id: 'converted', label: 'Lead Converted', icon: CheckCircleIcon }
-                 ].map((stage, idx, arr) => {
+                 {PIPELINE_STAGES.map((stage, idx, arr) => {
                    const isCompleted = arr.findIndex(s => s.id === lead.pipeline_stage) >= idx;
                    const isCurrent = lead.pipeline_stage === stage.id;
                    

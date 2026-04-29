@@ -40,36 +40,37 @@ export const AuthProvider = ({ children }) => {
    * @returns {boolean}
    */
   const hasPermission = (module, action) => {
-    if (!permissions || permissions.length === 0) return false;
-    // Admin has full access
+    // Admin has full access — check FIRST before anything else
     if (user?.role === 'admin') return true;
+    
+    if (!permissions || permissions.length === 0) return false;
     
     const perm = permissions.find(p => p.module === module);
     if (!perm) return false;
-    return perm[`can_${action}`] === true;
+
+    // Map semantic actions to DB columns (matches backend roleMiddleware)
+    const actionMap = {
+      'view': 'can_view',
+      'create': 'can_create',
+      'edit': 'can_edit',
+      'delete': 'can_delete',
+      'approve': 'can_edit'
+    };
+    
+    const column = actionMap[action] || `can_${action}`;
+    return perm[column] === true;
   };
 
   /**
    * Get the dashboard path for the current user's role
    * Dynamically determines the path based on role_name
    */
-  const getDashboardPath = () => {
-    if (!user || !user.role) return '/login';
-    const role = user.role.toLowerCase();
+  const getDashboardPath = (providedUser) => {
+    const activeUser = providedUser || user;
+    if (!activeUser || !activeUser.role) return '/login';
     
-    // Map roles to their dashboard paths
-    const dashboardMap = {
-      admin: '/admin-dashboard',
-      manager: '/manager-dashboard',
-      employee: '/employee-dashboard',
-      hr: '/hr-dashboard',
-      sales: '/sales-dashboard',
-      creator: '/creator/dashboard',
-      approver: '/approver/dashboard',
-      worker: '/worker/dashboard',
-    };
-
-    return dashboardMap[role] || `/${role}-dashboard`;
+    if (activeUser.role === 'admin') return '/admin-dashboard';
+    return '/dashboard';
   };
 
   return (

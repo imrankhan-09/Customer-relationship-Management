@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api/api';
 import { PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { useNotification } from '../../context/NotificationContext';
 
 const RoleManagement = () => {
+  const { showSuccess, showError } = useNotification();
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
   
@@ -36,6 +38,7 @@ const RoleManagement = () => {
         await api.put(`/admin/update-role/${editingId}`, formData);
       } else {
         await api.post('/admin/create-role', formData);
+        showSuccess('Role Created Successfully');
       }
       setFormData({ role_name: '' });
       setIsEditing(false);
@@ -43,24 +46,34 @@ const RoleManagement = () => {
       fetchRoles();
     } catch (err) {
       console.error('Error saving role:', err);
-      alert(err.response?.data?.message || 'Error saving role');
+      showError(err.response?.data?.message || 'Error saving role');
     }
   };
 
   const handleEdit = (role) => {
+    if (role.role_name === 'admin') {
+      showError('Admin role cannot be modified');
+      return;
+    }
     setFormData({ role_name: role.role_name });
     setIsEditing(true);
     setEditingId(role.id);
   };
 
   const handleDelete = async (id) => {
+    const targetRole = roles.find(r => parseInt(r.id, 10) === parseInt(id, 10));
+    if (targetRole?.role_name === 'admin') {
+      showError('Admin role cannot be modified');
+      return;
+    }
     if (window.confirm('Are you sure you want to delete this role? This cannot be undone.')) {
       try {
         await api.delete(`/admin/delete-role/${id}`);
+        showSuccess('Role Deleted Successfully');
         fetchRoles();
       } catch (err) {
         console.error('Error deleting role:', err);
-        alert(err.response?.data?.message || 'Error deleting role');
+        showError(err.response?.data?.message || 'Error deleting role');
       }
     }
   };
@@ -106,8 +119,22 @@ const RoleManagement = () => {
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 capitalize">{r.role_name}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{r.user_count}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button onClick={() => handleEdit(r)} className="text-blue-600 hover:text-blue-900 mr-4"><PencilSquareIcon className="w-5 h-5 inline"/></button>
-                  <button onClick={() => handleDelete(r.id)} className="text-red-600 hover:text-red-900"><TrashIcon className="w-5 h-5 inline"/></button>
+                  <button
+                    onClick={() => handleEdit(r)}
+                    disabled={r.role_name === 'admin'}
+                    className="text-blue-600 hover:text-blue-900 mr-4 disabled:opacity-40 disabled:cursor-not-allowed"
+                    title={r.role_name === 'admin' ? 'Admin role cannot be modified' : 'Edit'}
+                  >
+                    <PencilSquareIcon className="w-5 h-5 inline"/>
+                  </button>
+                  <button
+                    onClick={() => handleDelete(r.id)}
+                    disabled={r.role_name === 'admin'}
+                    className="text-red-600 hover:text-red-900 disabled:opacity-40 disabled:cursor-not-allowed"
+                    title={r.role_name === 'admin' ? 'Admin role cannot be modified' : 'Delete'}
+                  >
+                    <TrashIcon className="w-5 h-5 inline"/>
+                  </button>
                 </td>
               </tr>
             ))}

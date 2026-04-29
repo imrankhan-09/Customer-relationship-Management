@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../api/api';
 import { 
   MagnifyingGlassIcon, 
@@ -16,12 +16,13 @@ import {
 
 const MyLeads = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [leads, setLeads] = useState([]);
   const [filteredLeads, setFilteredLeads] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterStatus, setFilterStatus] = useState(searchParams.get('status') || 'all');
   const [selectedLead, setSelectedLead] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -31,6 +32,11 @@ const MyLeads = () => {
     const interval = setInterval(() => fetchLeads(true), 30000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const status = searchParams.get('status');
+    if (status) setFilterStatus(status);
+  }, [searchParams]);
 
   useEffect(() => {
     filterLeads();

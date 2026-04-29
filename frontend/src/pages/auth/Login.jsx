@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthProvider';
 import api from '../../api/api';
+import { useNotification } from '../../context/NotificationContext';
 import { 
   EnvelopeIcon, 
   LockClosedIcon, 
@@ -15,8 +16,9 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const { login } = useAuth();
+  const { login: authLogin, getDashboardPath } = useAuth();
   const navigate = useNavigate();
+  const { showSuccess, showError } = useNotification();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,26 +34,17 @@ const Login = () => {
       localStorage.setItem('token', token);
 
       // Update Auth context (includes permissions)
-      login(user);
+      authLogin(user);
 
-      // Dynamic redirect based on role from database
-      const role = user.role?.toLowerCase();
-      const dashboardMap = {
-        admin: '/admin-dashboard',
-        manager: '/manager-dashboard',
-        employee: '/employee-dashboard',
-        hr: '/hr-dashboard',
-        sales: '/sales-dashboard',
-        creator: '/creator/dashboard',
-        approver: '/approver/dashboard',
-        worker: '/worker/dashboard',
-      };
-
-      const redirectPath = dashboardMap[role] || `/${role}/dashboard`;
+      // Use the unified redirect path from AuthProvider
+      const redirectPath = getDashboardPath(user);
+      showSuccess('Logged In Successfully');
       navigate(redirectPath);
     } catch (err) {
       console.error('Login error:', err);
-      setError(err.response?.data?.message || 'Something went wrong. Please try again.');
+      const msg = err.response?.data?.message || 'Something went wrong. Please try again.';
+      setError(msg);
+      showError(msg);
     } finally {
       setIsLoading(false);
     }

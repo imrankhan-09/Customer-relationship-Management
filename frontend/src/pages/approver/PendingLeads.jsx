@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/api';
+import { useNotification } from '../../context/NotificationContext';
 import { 
   CheckCircleIcon, 
   XCircleIcon, 
@@ -17,6 +18,7 @@ import {
 
 const PendingLeads = () => {
   const navigate = useNavigate();
+  const { showSuccess, showError } = useNotification();
   const [leads, setLeads] = useState([]);
   const [filteredLeads, setFilteredLeads] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -63,7 +65,7 @@ const PendingLeads = () => {
     }
 
     if (action === 'rejected' && !rejectionReason) {
-      alert('Please provide a reason for rejection.');
+      showError('Please provide a reason for rejection');
       return;
     }
 
@@ -76,6 +78,7 @@ const PendingLeads = () => {
         assigned_to: action === 'approved' && selectedWorkerId ? selectedWorkerId : undefined
       });
       await fetchLeads(); // Refresh list
+      showSuccess(`Lead ${action === 'approved' ? 'Approved' : 'Rejected'} Successfully`);
       setIsModalOpen(false);
       setNotes('');
       setRejectionReason('');
@@ -83,7 +86,7 @@ const PendingLeads = () => {
       setSelectedWorkerId('');
     } catch (err) {
       console.error(`Error updating lead to ${action}:`, err);
-      alert(`Failed to ${action} lead.`);
+      showError(`Failed to ${action} lead`);
     } finally {
       setIsProcessing(false);
     }
@@ -130,7 +133,7 @@ const PendingLeads = () => {
                  </div>
                  <div>
                     <h2 className="text-2xl font-black text-slate-900">{selectedLead.name}</h2>
-                    <p className="text-slate-500 font-bold uppercase tracking-wider text-xs">Verification Review</p>
+                    <p className="text-slate-500 font-bold uppercase tracking-wider text-xs">Approval Review</p>
                  </div>
               </div>
               <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-white rounded-xl transition-all text-slate-400 hover:text-rose-500 border border-transparent hover:border-slate-100 shadow-sm">
@@ -162,7 +165,7 @@ const PendingLeads = () => {
               </div>
 
               <div className="space-y-4 bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Verification Feedback</h3>
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Approval Feedback</h3>
                 <div className="space-y-4">
                    <div className="space-y-2">
                       <label className="text-xs font-bold text-slate-500 ml-1">Internal Notes</label>
@@ -227,7 +230,7 @@ const PendingLeads = () => {
                   className="px-8 py-2.5 bg-emerald-600 text-white font-bold rounded-xl shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex items-center gap-2"
                 >
                   <ShieldCheckIcon className="w-5 h-5" />
-                  {selectedWorkerId ? 'Approve & Assign' : 'Approve & Verify'}
+                  {selectedWorkerId ? 'Approve & Assign' : 'Approve'}
                 </button>
               )}
             </div>
@@ -246,7 +249,7 @@ const PendingLeads = () => {
           </button>
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Approval Queue</h1>
-            <p className="text-slate-500 text-sm font-medium">Review and verify incoming leads</p>
+            <p className="text-slate-500 text-sm font-medium">Review and approve incoming leads</p>
           </div>
         </div>
         <div className="px-5 py-2 bg-amber-50 text-amber-700 rounded-2xl border border-amber-100 font-bold text-sm">

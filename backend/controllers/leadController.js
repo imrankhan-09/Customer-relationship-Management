@@ -1,5 +1,8 @@
 const { pool } = require('../config/db');
 
+const PHONE_REGEX = /^[0-9]{10}$/;
+const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+
 // @desc    Create new lead
 // @route   POST /api/leads
 // @access  Private
@@ -7,23 +10,91 @@ const createLead = async (req, res) => {
   const { name, phone, email, type, extra_data } = req.body;
   const created_by = req.user.id;
 
+  const normalizedName = typeof name === 'string' ? name.trim() : '';
+  const normalizedType = typeof type === 'string' ? type.trim() : '';
+  const normalizedPhone = typeof phone === 'string' ? phone.trim() : '';
+  const normalizedEmail = typeof email === 'string' ? email.trim() : '';
+
   // Basic validation
-  if (!name || !type) {
+  if (!normalizedName || !normalizedType) {
     return res.status(400).json({ message: 'Name and Type are required' });
   }
 
+  if (normalizedPhone && !PHONE_REGEX.test(normalizedPhone)) {
+    return res.status(400).json({ message: 'Invalid phone' });
+  }
+
+  if (normalizedEmail && !EMAIL_REGEX.test(normalizedEmail)) {
+    return res.status(400).json({ message: 'Invalid email' });
+  }
+
   try {
+    if (normalizedPhone) {
+      const phoneDuplicate = await pool.query(
+        'SELECT id FROM leads WHERE phone = $1 LIMIT 1',
+        [normalizedPhone]
+      );
+      if (phoneDuplicate.rows.length > 0) {
+        return res.status(409).json({ message: 'Duplicate phone number' });
+      }
+    }
+
+    if (normalizedEmail) {
+      const emailDuplicate = await pool.query(
+        'SELECT id FROM leads WHERE LOWER(email) = LOWER($1) LIMIT 1',
+        [normalizedEmail]
+      );
+      if (emailDuplicate.rows.length > 0) {
+        return res.status(409).json({ message: 'Duplicate email' });
+      }
+    }
+
+    const nameDuplicate = await pool.query(
+      'SELECT id FROM leads WHERE LOWER(name) = LOWER($1) LIMIT 1',
+      [normalizedName]
+    );
+    if (nameDuplicate.rows.length > 0) {
+      return res.status(409).json({ message: 'Duplicate name' });
+    }
+
     const query = `
       INSERT INTO leads (name, phone, email, type, extra_data, created_by)
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *;
     `;
-    const values = [name, phone, email, type, JSON.stringify(extra_data || {}), created_by];
+    const values = [
+      normalizedName,
+      normalizedPhone || null,
+      normalizedEmail || null,
+      normalizedType,
+      JSON.stringify(extra_data || {}),
+      created_by
+    ];
 
     const result = await pool.query(query, values);
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Create Lead Error:', error.message);
+    if (error.code === '23505') {
+      if ((error.constraint || '').includes('phone')) {
+        return res.status(409).json({ message: 'Duplicate phone number' });
+      }
+      if ((error.constraint || '').includes('email')) {
+        return res.status(409).json({ message: 'Duplicate email' });
+      }
+      if ((error.constraint || '').includes('name')) {
+        return res.status(409).json({ message: 'Duplicate name' });
+      }
+      return res.status(409).json({ message: 'Duplicate lead data' });
+    }
+    if (error.code === '23514') {
+      if ((error.constraint || '').includes('phone')) {
+        return res.status(400).json({ message: 'Invalid phone' });
+      }
+      if ((error.constraint || '').includes('email')) {
+        return res.status(400).json({ message: 'Invalid email' });
+      }
+    }
     res.status(500).json({ message: 'Server error creating lead' });
   }
 };
@@ -33,21 +104,38 @@ const createLead = async (req, res) => {
 // @access  Private
 const getLeads = async (req, res) => {
   const { search } = req.query;
+  const { id: userId, role: userRole } = req.user;
+
   try {
     let query = `
       SELECT l.*, u.name as assigned_worker_name 
       FROM leads l 
       LEFT JOIN users u ON l.assigned_to = u.id
+      WHERE 1=1
     `;
     let values = [];
+    let argIndex = 1;
 
+    // 1. Role-based filtering
+    if (userRole === 'creator') {
+      query += ` AND l.created_by = $${argIndex++}`;
+      values.push(userId);
+    } else if (userRole === 'worker') {
+      query += ` AND l.assigned_to = $${argIndex++}`;
+      values.push(userId);
+    }
+    // Admin and Approver see everything (1=1 covers them)
+
+    // 2. Search filtering
     if (search) {
-      query += ` WHERE 
-        l.name ILIKE $1 OR 
-        l.email ILIKE $1 OR 
-        l.phone ILIKE $1 OR 
-        l.type ILIKE $1`;
+      query += ` AND (
+        l.name ILIKE $${argIndex} OR 
+        l.email ILIKE $${argIndex} OR 
+        l.phone ILIKE $${argIndex} OR 
+        l.type ILIKE $${argIndex}
+      )`;
       values.push(`%${search}%`);
+      argIndex++;
     }
 
     query += ' ORDER BY l.created_at DESC';
@@ -132,8 +220,8 @@ const updateLead = async (req, res) => {
       finalStatus = 'assigned';
     }
 
-    // 3. Enforce restrictions for non-approver roles
-    if (userRole !== 'approver') {
+    // 3. Enforce restrictions for non-authority roles (only Admin and Approver can change status/assignment)
+    if (userRole !== 'approver' && userRole !== 'admin') {
       const isTryingToChangeStatus = status !== undefined && status !== currentLead.status;
       const isTryingToChangePipeline = pipeline_stage !== undefined && pipeline_stage !== currentLead.pipeline_stage;
       const isTryingToChangeAssignment = assigned_to !== undefined && assigned_to !== currentLead.assigned_to;
@@ -156,7 +244,33 @@ const updateLead = async (req, res) => {
       }
     }
 
-    // 4. Perform update
+    // 4. Handle stage history tracking
+    if (pipeline_stage !== undefined && pipeline_stage !== currentLead.pipeline_stage) {
+      // Calculate duration of previous stage
+      const leftAt = new Date();
+      const enteredAt = new Date(currentLead.last_stage_change);
+      const durationSeconds = Math.floor((leftAt - enteredAt) / 1000);
+
+      // Close previous stage record
+      await pool.query(`
+        UPDATE lead_stage_history 
+        SET left_at = $1, duration_seconds = $2 
+        WHERE lead_id = $3 AND stage = $4 AND left_at IS NULL
+      `, [leftAt, durationSeconds, parsedLeadId, currentLead.pipeline_stage]);
+
+      // Create new stage record
+      await pool.query(`
+        INSERT INTO lead_stage_history (lead_id, stage, entered_at, changed_by)
+        VALUES ($1, $2, $3, $4)
+      `, [parsedLeadId, pipeline_stage, leftAt, req.user.id]);
+
+      // Update lead's last_stage_change
+      await pool.query(`
+        UPDATE leads SET last_stage_change = $1 WHERE id = $2
+      `, [leftAt, parsedLeadId]);
+    }
+
+    // 5. Perform update
     const query = `
       UPDATE leads 
       SET 
@@ -181,7 +295,7 @@ const updateLead = async (req, res) => {
       finalType,
       finalStatus,
       finalPipelineStage,
-      finalExtraData || {}, // Pass as object, pg driver handles jsonb
+      finalExtraData || {}, 
       parsedAssignedTo,
       finalNotes,
       finalRejectionReason,
@@ -205,31 +319,44 @@ const updateLead = async (req, res) => {
 // @route   GET /api/leads/stats
 // @access  Private
 const getLeadStats = async (req, res) => {
+  const { id: userId, role: userRole } = req.user;
+
   try {
     console.log('--- Fetching Lead Statistics ---');
-    const totalLeadsQuery = 'SELECT COUNT(*) FROM leads';
-    const activeLeadsQuery = "SELECT COUNT(*) FROM leads WHERE status != 'converted' AND status != 'rejected'";
-    const convertedLeadsQuery = "SELECT COUNT(*) FROM leads WHERE status = 'converted'";
-    const approvedLeadsQuery = "SELECT COUNT(*) FROM leads WHERE status = 'approved'";
-    const rejectedLeadsQuery = "SELECT COUNT(*) FROM leads WHERE status = 'rejected'";
-    const pendingLeadsQuery = "SELECT COUNT(*) FROM leads WHERE status = 'pending'";
-    const assignedLeadsQuery = "SELECT COUNT(*) FROM leads WHERE status = 'assigned'";
+    
+    let whereClause = 'WHERE 1=1';
+    let params = [];
+    if (userRole === 'creator') {
+      whereClause = 'WHERE created_by = $1';
+      params = [userId];
+    } else if (userRole === 'worker') {
+      whereClause = 'WHERE assigned_to = $1';
+      params = [userId];
+    }
+
+    const totalLeadsQuery = `SELECT COUNT(*) FROM leads ${whereClause}`;
+    const activeLeadsQuery = `SELECT COUNT(*) FROM leads ${whereClause} AND status != 'converted' AND status != 'rejected'`;
+    const convertedLeadsQuery = `SELECT COUNT(*) FROM leads ${whereClause} AND status = 'converted'`;
+    const approvedLeadsQuery = `SELECT COUNT(*) FROM leads ${whereClause} AND status = 'approved'`;
+    const rejectedLeadsQuery = `SELECT COUNT(*) FROM leads ${whereClause} AND status = 'rejected'`;
+    const pendingLeadsQuery = `SELECT COUNT(*) FROM leads ${whereClause} AND status = 'pending'`;
+    const assignedLeadsQuery = `SELECT COUNT(*) FROM leads ${whereClause} AND status = 'assigned'`;
     
     const [total, active, converted, approved, rejected, pending, assigned] = await Promise.all([
-      pool.query(totalLeadsQuery),
-      pool.query(activeLeadsQuery),
-      pool.query(convertedLeadsQuery),
-      pool.query(approvedLeadsQuery),
-      pool.query(rejectedLeadsQuery),
-      pool.query(pendingLeadsQuery),
-      pool.query(assignedLeadsQuery)
+      pool.query(totalLeadsQuery, params),
+      pool.query(activeLeadsQuery, params),
+      pool.query(convertedLeadsQuery, params),
+      pool.query(approvedLeadsQuery, params),
+      pool.query(rejectedLeadsQuery, params),
+      pool.query(pendingLeadsQuery, params),
+      pool.query(assignedLeadsQuery, params)
     ]);
 
-    const typeBreakdownQuery = 'SELECT type, COUNT(*) as value FROM leads GROUP BY type';
-    const typeResult = await pool.query(typeBreakdownQuery);
+    const typeBreakdownQuery = `SELECT type, COUNT(*) as value FROM leads ${whereClause} GROUP BY type`;
+    const typeResult = await pool.query(typeBreakdownQuery, params);
 
-    const recentLeadsQuery = 'SELECT * FROM leads ORDER BY created_at DESC LIMIT 5';
-    const recentResult = await pool.query(recentLeadsQuery);
+    const recentLeadsQuery = `SELECT * FROM leads ${whereClause} ORDER BY created_at DESC LIMIT 5`;
+    const recentResult = await pool.query(recentLeadsQuery, params);
 
     const stats = {
       total: parseInt(total.rows[0].count) || 0,
@@ -255,8 +382,21 @@ const getLeadStats = async (req, res) => {
 // @route   GET /api/leads/stats/monthly
 // @access  Private
 const getMonthlyStats = async (req, res) => {
+  const { id: userId, role: userRole } = req.user;
+
   try {
     console.log('--- Fetching Monthly Stats ---');
+    
+    let whereClause = 'WHERE created_at >= NOW() - INTERVAL \'6 months\'';
+    let params = [];
+    if (userRole === 'creator') {
+      whereClause += ' AND created_by = $1';
+      params = [userId];
+    } else if (userRole === 'worker') {
+      whereClause += ' AND assigned_to = $1';
+      params = [userId];
+    }
+
     const query = `
       SELECT 
         TO_CHAR(created_at, 'Mon') as month,
@@ -267,11 +407,11 @@ const getMonthlyStats = async (req, res) => {
         COUNT(*) FILTER (WHERE status = 'converted') as converted,
         MIN(created_at) as sort_date
       FROM leads
-      WHERE created_at >= NOW() - INTERVAL '6 months'
+      ${whereClause}
       GROUP BY month
       ORDER BY sort_date ASC
     `;
-    const result = await pool.query(query);
+    const result = await pool.query(query, params);
     
     const stats = {
       months: result.rows.map(r => r.month),
@@ -311,6 +451,28 @@ const deleteLead = async (req, res) => {
   }
 };
 
+// @desc    Get lead analytics (stage velocity)
+// @route   GET /api/leads/analytics/velocity
+// @access  Private
+const getLeadAnalytics = async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        stage, 
+        AVG(duration_seconds) as avg_duration,
+        COUNT(*) as total_occurrences
+      FROM lead_stage_history
+      WHERE duration_seconds IS NOT NULL
+      GROUP BY stage
+    `;
+    const result = await pool.query(query);
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error('Analytics Error:', error.message);
+    res.status(500).json({ message: 'Server error fetching analytics' });
+  }
+};
+
 module.exports = {
   createLead,
   getLeads,
@@ -318,7 +480,8 @@ module.exports = {
   updateLead,
   getLeadStats,
   deleteLead,
-  getMonthlyStats
+  getMonthlyStats,
+  getLeadAnalytics
 };
 
 
