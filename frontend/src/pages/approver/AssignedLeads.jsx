@@ -13,6 +13,7 @@ import {
   CheckBadgeIcon,
   ArrowTrendingUpIcon
 } from '@heroicons/react/24/outline';
+import LeadReassign from '../../components/leads/LeadReassign';
 
 const AssignedLeads = () => {
   const navigate = useNavigate();
@@ -170,13 +171,20 @@ const AssignedLeads = () => {
                          <span className="max-w-[100px] truncate">{lead.email || 'N/A'}</span>
                       </div>
                    </div>
-                   <button 
-                     onClick={() => navigate(`/approver/track-lead/${lead.id}`)}
-                     className="px-4 py-2 bg-slate-900 text-white rounded-xl hover:bg-blue-600 transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-slate-200"
-                   >
-                      <ArrowTrendingUpIcon className="w-3.5 h-3.5" />
-                      Track Journey
-                   </button>
+                   <div className="flex items-center gap-2">
+                     <LeadReassign 
+                       leadId={lead.id} 
+                       currentAssignee={lead.assigned_to} 
+                       onReassignSuccess={fetchLeads} 
+                     />
+                     <button 
+                       onClick={() => navigate(`/approver/track-lead/${lead.id}`)}
+                       className="px-4 py-2 bg-slate-900 text-white rounded-xl hover:bg-blue-600 transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-slate-200"
+                     >
+                        <ArrowTrendingUpIcon className="w-3.5 h-3.5" />
+                        Track Journey
+                     </button>
+                   </div>
                 </div>
             </div>
           ))

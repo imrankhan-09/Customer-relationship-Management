@@ -122,6 +122,7 @@ const login = async (req, res) => {
         role: roleName,
         role_id: user.role_id,
         is_active: user.is_active,
+        is_tracking_enabled: user.is_tracking_enabled,
         permissions,
       },
     });

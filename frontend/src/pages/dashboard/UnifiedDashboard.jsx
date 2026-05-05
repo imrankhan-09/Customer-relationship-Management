@@ -19,9 +19,12 @@ import {
   ChartBarIcon,
   UserIcon,
   Squares2X2Icon,
-  ViewColumnsIcon
+  ViewColumnsIcon,
+  MapPinIcon
 } from '@heroicons/react/24/outline';
 import LeadKanban from '../../components/sales/LeadKanban';
+import LocationTracker from '../../components/location/LocationTracker';
+import AdminLocationView from '../../components/location/AdminLocationView';
 import {
   AreaChart,
   Area,
@@ -54,11 +57,17 @@ const UnifiedDashboard = () => {
   const [monthlyData, setMonthlyData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchParams] = useSearchParams();
-  const [activeView, setActiveView] = useState(searchParams.get('view') === 'pipeline' ? 'pipeline' : 'overview');
+  const getInitialView = () => {
+    const view = searchParams.get('view');
+    if (['pipeline', 'location', 'overview'].includes(view)) return view;
+    return 'overview';
+  };
+  const [activeView, setActiveView] = useState(getInitialView());
 
   useEffect(() => {
     const view = searchParams.get('view');
     if (view === 'pipeline') setActiveView('pipeline');
+    else if (view === 'location') setActiveView('location');
     else if (view === 'overview') setActiveView('overview');
   }, [searchParams]);
 
@@ -167,7 +176,7 @@ const UnifiedDashboard = () => {
 
   const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#6366F1'];
 
-  const pieData = statsData.byType.length > 0
+  const pieData = statsData.byType?.length > 0
     ? statsData.byType.map(item => ({ name: item.type.toUpperCase(), value: parseInt(item.value) }))
     : [{ name: 'NO DATA', value: 1 }];
 
@@ -216,7 +225,7 @@ const UnifiedDashboard = () => {
         {(user?.role === 'worker' || user?.role === 'admin' || user?.role === 'approver') && (
           <div className="flex items-center gap-1 bg-white/60 p-1.5 rounded-2xl border border-white/80 self-start">
             <button 
-              onClick={() => setActiveView('overview')}
+              onClick={() => navigate('?view=overview')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
                 activeView === 'overview' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100'
               }`}
@@ -225,7 +234,7 @@ const UnifiedDashboard = () => {
               Overview
             </button>
             <button 
-              onClick={() => setActiveView('pipeline')}
+              onClick={() => navigate('?view=pipeline')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
                 activeView === 'pipeline' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100'
               }`}
@@ -233,6 +242,17 @@ const UnifiedDashboard = () => {
               <ViewColumnsIcon className="w-4 h-4" />
               Sales Pipeline
             </button>
+            {user?.role === 'admin' && (
+              <button 
+                onClick={() => navigate('?view=location')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                  activeView === 'location' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100'
+                }`}
+              >
+                <MapPinIcon className="w-4 h-4" />
+                Field Tracking
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -241,8 +261,17 @@ const UnifiedDashboard = () => {
         <div className="animate-in slide-in-from-bottom-4 duration-500">
            <LeadKanban />
         </div>
+      ) : activeView === 'location' ? (
+        <div className="animate-in slide-in-from-bottom-4 duration-500">
+           <AdminLocationView />
+        </div>
       ) : (
         <>
+        {user?.role === 'worker' && (
+          <div className="animate-in slide-in-from-top-4 duration-700">
+            <LocationTracker user={user} />
+          </div>
+        )}
 
       {/* Dynamic Stats Grid */}
       <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-${stats.length > 4 ? 3 : stats.length} xl:grid-cols-${stats.length} gap-6`}>

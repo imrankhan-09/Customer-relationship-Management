@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/api';
 import { PIPELINE_STAGES } from '../../utils/pipelineConstants';
-import { 
-  UserIcon, 
-  CurrencyDollarIcon, 
+import {
+  UserIcon,
+  CurrencyDollarIcon,
   ClockIcon,
   ChevronRightIcon,
   HandRaisedIcon
@@ -52,7 +52,7 @@ const LeadKanban = () => {
     const leadId = draggedLead.id;
 
     // Optimistic Update
-    setLeads(prev => prev.map(l => 
+    setLeads(prev => prev.map(l =>
       l.id === leadId ? { ...l, pipeline_stage: targetStage } : l
     ));
 
@@ -61,9 +61,13 @@ const LeadKanban = () => {
       showSuccess(`Lead moved to ${targetStage.toUpperCase()}`);
     } catch (err) {
       console.error('Error updating stage:', err);
-      showError('Failed to update stage');
+      if (err.response && err.response.data && err.response.data.message) {
+        showError(err.response.data.message);
+      } else {
+        showError('Failed to update stage');
+      }
       // Rollback
-      setLeads(prev => prev.map(l => 
+      setLeads(prev => prev.map(l =>
         l.id === leadId ? { ...l, pipeline_stage: oldStage } : l
       ));
     } finally {
@@ -84,10 +88,10 @@ const LeadKanban = () => {
       <div className="flex gap-6 min-w-max p-2">
         {PIPELINE_STAGES.map((stage) => {
           const stageLeads = leads.filter(l => l.pipeline_stage === stage.id || (stage.id === 'new' && !l.pipeline_stage));
-          
+
           return (
-            <div 
-              key={stage.id} 
+            <div
+              key={stage.id}
               className="w-80 flex flex-col"
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, stage.id)}
@@ -104,12 +108,11 @@ const LeadKanban = () => {
               </div>
 
               {/* Column Content */}
-              <div className={`flex-1 min-h-[500px] rounded-[2rem] p-3 transition-all ${
-                draggedLead ? 'bg-slate-100/50 ring-2 ring-dashed ring-slate-200' : 'bg-slate-50/50'
-              }`}>
+              <div className={`flex-1 min-h-[500px] rounded-[2rem] p-3 transition-all ${draggedLead ? 'bg-slate-100/50 ring-2 ring-dashed ring-slate-200' : 'bg-slate-50/50'
+                }`}>
                 <div className="space-y-3">
                   {stageLeads.map((lead) => (
-                    <div 
+                    <div
                       key={lead.id}
                       draggable
                       onDragStart={() => handleDragStart(lead)}
@@ -122,31 +125,31 @@ const LeadKanban = () => {
                         </div>
                         <ChevronRightIcon className="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition-all" />
                       </div>
-                      
+
                       <h4 className="font-bold text-slate-900 text-sm mb-1">{lead.name}</h4>
                       <p className="text-[10px] text-slate-500 font-medium mb-4">{lead.type.toUpperCase()}</p>
-                      
+
                       <div className="flex items-center justify-between pt-3 border-t border-slate-50">
                         <div className="flex items-center gap-1.5">
-                           <CurrencyDollarIcon className="w-3.5 h-3.5 text-emerald-500" />
-                           <span className="text-xs font-black text-slate-700">
-                             ${parseFloat(lead.opportunity_value || 0).toLocaleString()}
-                           </span>
+                          <CurrencyDollarIcon className="w-3.5 h-3.5 text-emerald-500" />
+                          <span className="text-xs font-black text-slate-700">
+                            ${parseFloat(lead.opportunity_value || 0).toLocaleString()}
+                          </span>
                         </div>
                         <div className="flex items-center gap-1.5 text-slate-400">
-                           <ClockIcon className="w-3.5 h-3.5" />
-                           <span className="text-[10px] font-bold">
-                             {new Date(lead.updated_at).toLocaleDateString()}
-                           </span>
+                          <ClockIcon className="w-3.5 h-3.5" />
+                          <span className="text-[10px] font-bold">
+                            {new Date(lead.updated_at).toLocaleDateString()}
+                          </span>
                         </div>
                       </div>
                     </div>
                   ))}
-                  
+
                   {stageLeads.length === 0 && !draggedLead && (
                     <div className="flex flex-col items-center justify-center py-10 text-slate-300">
-                       <HandRaisedIcon className="w-8 h-8 mb-2 opacity-20" />
-                       <p className="text-[10px] font-bold uppercase tracking-widest">Empty Stage</p>
+                      <HandRaisedIcon className="w-8 h-8 mb-2 opacity-20" />
+                      <p className="text-[10px] font-bold uppercase tracking-widest">Empty Stage</p>
                     </div>
                   )}
                 </div>

@@ -8,7 +8,8 @@ const {
   getLeadStats,
   deleteLead,
   getMonthlyStats,
-  getLeadAnalytics
+  getLeadAnalytics,
+  reassignLead
 } = require('../controllers/leadController');
 const { protect } = require('../middleware/authMiddleware');
 const { checkPermission } = require('../middleware/roleMiddleware');
@@ -20,6 +21,7 @@ router.get('/stats', checkPermission('leads', 'view'), getLeadStats);
 router.get('/stats/monthly', checkPermission('leads', 'view'), getMonthlyStats);
 router.get('/analytics/velocity', checkPermission('leads', 'view'), getLeadAnalytics);
 router.post('/', checkPermission('leads', 'create'), createLead);
+router.post('/reassign', checkPermission('leads', 'edit'), reassignLead);
 
 router.get('/', checkPermission('leads', 'view'), getLeads);
 router.get('/:id', checkPermission('leads', 'view'), getLeadById);
@@ -27,4 +29,5 @@ router.put('/:id', checkPermission('leads', 'edit'), updateLead);
 router.delete('/:id', checkPermission('leads', 'delete'), deleteLead);
 
 
+module.exports = router;
 module.exports = router;

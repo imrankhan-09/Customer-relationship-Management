@@ -1,5 +1,6 @@
 const bcrypt = require('bcrypt');
 const { pool } = require('../config/db');
+const { createNotification } = require('./notificationController');
 
 const ADMIN_SELF_MODIFY_ERROR = 'Admin cannot modify their own role or status';
 const ADMIN_ROLE_MODIFY_ERROR = 'Admin role cannot be modified';
@@ -516,6 +517,31 @@ const updateRolePermissions = async (req, res) => {
       [roleId]
     );
 
+    // --- AUTO NOTIFICATION: Role Permissions Updated ---
+    try {
+      const roleNameResult = await pool.query('SELECT role_name FROM roles WHERE id = $1', [roleId]);
+      const roleName = roleNameResult.rows[0]?.role_name || 'your role';
+      
+      const affectedUsers = await pool.query('SELECT id FROM users WHERE role_id = $1', [roleId]);
+      
+      for (const affectedUser of affectedUsers.rows) {
+        const notification = await createNotification({
+          title: 'Role Permissions Updated',
+          message: `Permissions for the "${roleName}" role have been updated by admin.`,
+          receiver_id: affectedUser.id,
+          type: 'permission_update',
+          redirect_url: '/dashboard', // General redirect
+          sender_id: req.user.id
+        });
+        
+        if (notification && req.sendNotification) {
+          req.sendNotification(affectedUser.id, notification);
+        }
+      }
+    } catch (notifyErr) {
+      console.error('Error sending role permission notification:', notifyErr.message);
+    }
+
     res.status(200).json({ message: 'Permissions updated successfully', permissions: result.rows });
   } catch (error) {
     console.error('Update Permissions Error:', error.message);
@@ -583,6 +609,24 @@ const updateUserPermissions = async (req, res) => {
       'SELECT * FROM user_permissions WHERE user_id = $1 ORDER BY module',
       [userId]
     );
+
+    // --- AUTO NOTIFICATION: User Permissions Updated ---
+    try {
+      const notification = await createNotification({
+        title: 'Your Permissions Updated',
+        message: 'Your personal access permissions have been updated by admin.',
+        receiver_id: userId,
+        type: 'permission_update',
+        redirect_url: '/dashboard',
+        sender_id: req.user.id
+      });
+      
+      if (notification && req.sendNotification) {
+        req.sendNotification(userId, notification);
+      }
+    } catch (notifyErr) {
+      console.error('Error sending user permission notification:', notifyErr.message);
+    }
 
     res.status(200).json({ message: 'User permissions updated successfully', permissions: result.rows });
   } catch (error) {

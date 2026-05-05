@@ -2,6 +2,7 @@ export const PIPELINE_STAGES = [
   { id: 'new', label: 'Discovery', color: 'bg-blue-500' },
   { id: 'contacted', label: 'Qualified', color: 'bg-indigo-500' },
   { id: 'demo', label: 'Presentation', color: 'bg-purple-500' },
+  { id: 'quotation', label: 'Quotation', color: 'bg-pink-500' },
   { id: 'negotiation', label: 'Negotiation', color: 'bg-amber-500' },
   { id: 'won', label: 'Closure', color: 'bg-emerald-500' }
 ];

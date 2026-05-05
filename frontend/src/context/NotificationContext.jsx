@@ -1,4 +1,7 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import { io } from 'socket.io-client';
+import api from '../api/api';
+import { useAuth } from './AuthProvider';
 
 const NotificationContext = createContext();
 
@@ -11,26 +14,99 @@ export const useNotification = () => {
 };
 
 export const NotificationProvider = ({ children }) => {
+  const { user } = useAuth();
+  const [toasts, setToasts] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const socket = useRef(null);
+  const audioRef = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'));
 
-  const addNotification = useCallback((message, type = 'info', duration = 5000) => {
+  // 1. Toast logic (transient alerts)
+  const addToast = useCallback((message, type = 'info', duration = 5000) => {
     const id = Date.now() + Math.random();
-    setNotifications((prev) => [...prev, { id, message, type, duration }]);
+    setToasts((prev) => [...prev, { id, message, type, duration }]);
   }, []);
 
-  const removeNotification = useCallback((id) => {
-    setNotifications((prev) => prev.filter((notification) => notification.id !== id));
+  const removeToast = useCallback((id) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
 
-  const showSuccess = (message) => addNotification(message, 'success');
-  const showError = (message) => addNotification(message, 'error');
-  const showWarning = (message) => addNotification(message, 'warning');
-  const showInfo = (message) => addNotification(message, 'info');
+  // 2. Persistent Notification Logic
+  const fetchNotifications = useCallback(async () => {
+    if (!user) return;
+    try {
+      const res = await api.get('/notifications');
+      setNotifications(res.data.data);
+      setUnreadCount(res.data.unreadCount);
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+    }
+  }, [user]);
+
+  const markAsRead = async (id) => {
+    try {
+      await api.put(`/notifications/read/${id}`);
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (err) {
+      console.error('Error marking as read:', err);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    try {
+      await api.put('/notifications/read-all');
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      setUnreadCount(0);
+    } catch (err) {
+      console.error('Error marking all as read:', err);
+    }
+  };
+
+  // 3. Socket.io Integration
+  useEffect(() => {
+    if (user) {
+      fetchNotifications();
+
+      const socketUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000';
+      socket.current = io(socketUrl, {
+        withCredentials: true
+      });
+
+      socket.current.emit('join', user.id);
+
+      socket.current.on('new_notification', (notification) => {
+        setNotifications(prev => [notification, ...prev].slice(0, 20));
+        setUnreadCount(prev => prev + 1);
+        
+        // Sound and Toast
+        audioRef.current.play().catch(e => console.log('Audio play failed:', e));
+        addToast(`New Notification: ${notification.title}`, 'info');
+      });
+
+      return () => {
+        if (socket.current) socket.current.disconnect();
+      };
+    } else {
+      setNotifications([]);
+      setUnreadCount(0);
+    }
+  }, [user, fetchNotifications, addToast]);
+
+  const showSuccess = (message) => addToast(message, 'success');
+  const showError = (message) => addToast(message, 'error');
+  const showWarning = (message) => addToast(message, 'warning');
+  const showInfo = (message) => addToast(message, 'info');
 
   return (
-    <NotificationContext.Provider value={{ showSuccess, showError, showWarning, showInfo, notifications, removeNotification }}>
+    <NotificationContext.Provider value={{ 
+      showSuccess, showError, showWarning, showInfo, 
+      toasts, removeToast,
+      notifications, unreadCount, fetchNotifications, markAsRead, markAllAsRead
+    }}>
       {children}
-      <NotificationContainer notifications={notifications} removeNotification={removeNotification} />
+      <NotificationContainer toasts={toasts} removeToast={removeToast} />
     </NotificationContext.Provider>
   );
 };
@@ -38,11 +114,11 @@ export const NotificationProvider = ({ children }) => {
 // Internal Container Component for Toasts
 import { XMarkIcon, CheckCircleIcon, ExclamationCircleIcon, InformationCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
-const NotificationContainer = ({ notifications, removeNotification }) => {
+const NotificationContainer = ({ toasts, removeToast }) => {
   return (
     <div className="fixed top-6 right-6 z-[9999] flex flex-col gap-4 pointer-events-none">
-      {notifications.map((notification) => (
-        <Toast key={notification.id} {...notification} onRemove={() => removeNotification(notification.id)} />
+      {toasts.map((toast) => (
+        <Toast key={toast.id} {...toast} onRemove={() => removeToast(toast.id)} />
       ))}
     </div>
   );

@@ -16,7 +16,9 @@ import {
   UserIcon,
   ClockIcon,
   ShieldCheckIcon,
-  ViewColumnsIcon
+  ViewColumnsIcon,
+  MapPinIcon,
+  BellIcon
 } from '@heroicons/react/24/outline';
 
 const Sidebar = () => {
@@ -31,6 +33,7 @@ const Sidebar = () => {
     { to: '/admin/permissions', icon: DocumentPlusIcon, label: 'Permissions' },
     { to: '/dashboard?view=pipeline', icon: ViewColumnsIcon, label: 'Sales Pipeline' },
     { to: '/admin/reports', icon: ChartBarIcon, label: 'Reports' },
+    { to: '/dashboard?view=location', icon: MapPinIcon, label: 'Field Tracking' },
   ];
 
   // Non-admin users get dynamic permission-based navigation

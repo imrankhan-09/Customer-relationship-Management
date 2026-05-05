@@ -10,7 +10,8 @@ import {
   ClockIcon,
   UserMinusIcon,
   CheckBadgeIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  MapPinIcon
 } from '@heroicons/react/24/outline';
 
 const AdminDashboard = () => {
@@ -109,6 +110,15 @@ const AdminDashboard = () => {
       lightColor: 'bg-rose-50',
       textColor: 'text-rose-600',
       link: '/admin/users?status=all'
+    },
+    {
+      title: 'Field Tracking',
+      value: 'Active',
+      icon: MapPinIcon,
+      color: 'bg-emerald-500',
+      lightColor: 'bg-emerald-50',
+      textColor: 'text-emerald-600',
+      link: '/dashboard?view=location'
     },
   ];
 

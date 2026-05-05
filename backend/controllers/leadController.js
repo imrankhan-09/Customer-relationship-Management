@@ -1,4 +1,5 @@
 const { pool } = require('../config/db');
+const { createNotification } = require('./notificationController');
 
 const PHONE_REGEX = /^[0-9]{10}$/;
 const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
@@ -72,7 +73,38 @@ const createLead = async (req, res) => {
     ];
 
     const result = await pool.query(query, values);
-    res.status(201).json(result.rows[0]);
+    const newLead = result.rows[0];
+
+    // --- AUTO NOTIFICATION: Lead Created ---
+    try {
+      // 1. Find all Approvers
+      const approversResult = await pool.query(
+        "SELECT u.id FROM users u JOIN roles r ON u.role_id = r.id WHERE r.role_name = 'approver'"
+      );
+      
+      const creatorName = req.user.name;
+
+      for (const approver of approversResult.rows) {
+        const notificationData = {
+          title: 'New Lead Created',
+          message: `${creatorName} created a new lead: ${newLead.name}`,
+          receiver_id: approver.id,
+          type: 'lead_created',
+          reference_id: newLead.id,
+          redirect_url: `/approver/pending-leads`, // Adjust if needed
+          sender_id: req.user.id
+        };
+
+        const notification = await createNotification(notificationData);
+        if (notification && req.sendNotification) {
+          req.sendNotification(approver.id, notification);
+        }
+      }
+    } catch (notifyErr) {
+      console.error('Error sending lead creation notification:', notifyErr.message);
+    }
+
+    res.status(201).json(newLead);
   } catch (error) {
     console.error('Create Lead Error:', error.message);
     if (error.code === '23505') {
@@ -173,14 +205,14 @@ const getLeadById = async (req, res) => {
 // @access  Private
 const updateLead = async (req, res) => {
   const { id } = req.params;
-  const { 
-    name, 
-    phone, 
-    email, 
-    type, 
-    status, 
-    pipeline_stage, 
-    assigned_to, 
+  const {
+    name,
+    phone,
+    email,
+    type,
+    status,
+    pipeline_stage,
+    assigned_to,
     extra_data,
     notes,
     rejection_reason
@@ -191,11 +223,11 @@ const updateLead = async (req, res) => {
     // 1. Fetch ALL current lead data to support partial updates
     const parsedId = parseInt(id);
     const currentLeadResult = await pool.query('SELECT * FROM leads WHERE id = $1', [parsedId]);
-    
+
     if (currentLeadResult.rows.length === 0) {
       return res.status(404).json({ message: 'Lead not found' });
     }
-    
+
     const currentLead = currentLeadResult.rows[0];
 
     // 2. Merge values (use existing if not provided in body)
@@ -206,7 +238,7 @@ const updateLead = async (req, res) => {
     const finalExtraData = extra_data !== undefined ? extra_data : currentLead.extra_data;
     const finalNotes = notes !== undefined ? notes : currentLead.notes;
     let finalRejectionReason = rejection_reason !== undefined ? rejection_reason : currentLead.rejection_reason;
-    
+
     let finalStatus = status !== undefined ? status : currentLead.status;
     let finalPipelineStage = pipeline_stage !== undefined ? pipeline_stage : currentLead.pipeline_stage;
     let finalAssignedTo = assigned_to !== undefined ? assigned_to : currentLead.assigned_to;
@@ -230,11 +262,11 @@ const updateLead = async (req, res) => {
       const isResubmitting = currentLead.status === 'rejected' && status === 'pending';
 
       if ((isTryingToChangeStatus && !isResubmitting) || isTryingToChangePipeline || isTryingToChangeAssignment) {
-        return res.status(403).json({ 
-          message: 'Permission Denied: Only Approvers can modify lead status, pipeline stage, or assignments.' 
+        return res.status(403).json({
+          message: 'Permission Denied: Only Approvers can modify lead status, pipeline stage, or assignments.'
         });
       }
-      
+
       if (isResubmitting) {
         finalRejectionReason = null;
       } else {
@@ -270,6 +302,16 @@ const updateLead = async (req, res) => {
       `, [leftAt, parsedLeadId]);
     }
 
+    // 4.5. Validation: Cannot move to "negotiation" without at least 1 quotation
+    if (pipeline_stage === 'negotiation' && currentLead.pipeline_stage !== 'negotiation') {
+      const qCheck = await pool.query('SELECT id FROM quotations WHERE lead_id = $1 LIMIT 1', [parsedLeadId]);
+      if (qCheck.rows.length === 0) {
+        return res.status(400).json({ 
+          message: 'Cannot move to Negotiation stage without at least one quotation created.' 
+        });
+      }
+    }
+
     // 5. Perform update
     const query = `
       UPDATE leads 
@@ -295,7 +337,7 @@ const updateLead = async (req, res) => {
       finalType,
       finalStatus,
       finalPipelineStage,
-      finalExtraData || {}, 
+      finalExtraData || {},
       parsedAssignedTo,
       finalNotes,
       finalRejectionReason,
@@ -303,7 +345,32 @@ const updateLead = async (req, res) => {
     ];
 
     const result = await pool.query(query, values);
-    res.status(200).json(result.rows[0]);
+    const updatedLead = result.rows[0];
+
+    // --- AUTO NOTIFICATION: Lead Assigned ---
+    if (assigned_to && assigned_to !== currentLead.assigned_to) {
+      try {
+        const adminName = req.user.name;
+        const notificationData = {
+          title: 'New Lead Assigned',
+          message: `${adminName} assigned a lead to you: ${updatedLead.name}`,
+          receiver_id: assigned_to,
+          type: 'lead_assigned',
+          reference_id: updatedLead.id,
+          redirect_url: `/worker/lead/${updatedLead.id}`,
+          sender_id: req.user.id
+        };
+
+        const notification = await createNotification(notificationData);
+        if (notification && req.sendNotification) {
+          req.sendNotification(assigned_to, notification);
+        }
+      } catch (notifyErr) {
+        console.error('Error sending lead assignment notification:', notifyErr.message);
+      }
+    }
+
+    res.status(200).json(updatedLead);
   } catch (error) {
     console.error('Update Lead Error Detail:', {
       message: error.message,
@@ -323,7 +390,7 @@ const getLeadStats = async (req, res) => {
 
   try {
     console.log('--- Fetching Lead Statistics ---');
-    
+
     let whereClause = 'WHERE 1=1';
     let params = [];
     if (userRole === 'creator') {
@@ -341,7 +408,7 @@ const getLeadStats = async (req, res) => {
     const rejectedLeadsQuery = `SELECT COUNT(*) FROM leads ${whereClause} AND status = 'rejected'`;
     const pendingLeadsQuery = `SELECT COUNT(*) FROM leads ${whereClause} AND status = 'pending'`;
     const assignedLeadsQuery = `SELECT COUNT(*) FROM leads ${whereClause} AND status = 'assigned'`;
-    
+
     const [total, active, converted, approved, rejected, pending, assigned] = await Promise.all([
       pool.query(totalLeadsQuery, params),
       pool.query(activeLeadsQuery, params),
@@ -386,7 +453,7 @@ const getMonthlyStats = async (req, res) => {
 
   try {
     console.log('--- Fetching Monthly Stats ---');
-    
+
     let whereClause = 'WHERE created_at >= NOW() - INTERVAL \'6 months\'';
     let params = [];
     if (userRole === 'creator') {
@@ -412,7 +479,7 @@ const getMonthlyStats = async (req, res) => {
       ORDER BY sort_date ASC
     `;
     const result = await pool.query(query, params);
-    
+
     const stats = {
       months: result.rows.map(r => r.month),
       total: result.rows.map(r => parseInt(r.total)),
@@ -473,6 +540,123 @@ const getLeadAnalytics = async (req, res) => {
   }
 };
 
+// @desc    Reassign lead
+// @route   POST /api/leads/reassign
+// @access  Private
+const reassignLead = async (req, res) => {
+  const { lead_id, to_user_id, reason, leadId, newOwnerId } = req.body;
+  const reassigned_by = req.user.id;
+
+  const finalLeadId = lead_id || leadId;
+  const finalToUserId = to_user_id || newOwnerId;
+  const finalReason = reason || 'Reassigned by user'; // default reason if not provided
+
+  if (!finalLeadId || !finalToUserId) {
+    return res.status(400).json({ message: 'Lead ID and Target User ID are required' });
+  }
+
+  try {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // 1. Get current lead data
+      const leadResult = await client.query('SELECT assigned_to, status FROM leads WHERE id = $1', [finalLeadId]);
+      if (leadResult.rows.length === 0) {
+        throw new Error('Lead not found');
+      }
+      const from_user = leadResult.rows[0].assigned_to;
+      
+      // Validate new owner exists
+      const userResult = await client.query('SELECT id FROM users WHERE id = $1', [finalToUserId]);
+      if (userResult.rows.length === 0) {
+          throw new Error('Target User not found');
+      }
+
+      // 2. Update lead table - ensure status is set to assigned
+      await client.query(
+        'UPDATE leads SET assigned_to = $1, status = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
+        [finalToUserId, 'assigned', finalLeadId]
+      );
+
+      // --- AUTO NOTIFICATION: Lead Reassigned ---
+      try {
+        const adminName = req.user.name;
+        // Fetch lead name for notification
+        const leadNameRes = await client.query('SELECT name FROM leads WHERE id = $1', [finalLeadId]);
+        const leadName = leadNameRes.rows[0]?.name || 'a lead';
+
+        const notificationData = {
+          title: 'Lead Reassigned to You',
+          message: `${adminName} reassigned a lead to you: ${leadName}`,
+          receiver_id: finalToUserId,
+          type: 'lead_assigned',
+          reference_id: finalLeadId,
+          redirect_url: `/worker/lead/${finalLeadId}`,
+          sender_id: req.user.id
+        };
+
+        const notification = await createNotification(notificationData);
+        if (notification && req.sendNotification) {
+          req.sendNotification(finalToUserId, notification);
+        }
+      } catch (notifyErr) {
+        console.error('Error sending reassignment notification:', notifyErr.message);
+      }
+
+      // 3. Record reassignment history
+      await client.query(
+        'INSERT INTO lead_reassignments (lead_id, from_user, to_user, reason, reassigned_by) VALUES ($1, $2, $3, $4, $5)',
+        [finalLeadId, from_user, finalToUserId, finalReason, reassigned_by]
+      );
+
+      await client.query('COMMIT');
+      res.status(200).json({ message: 'Lead reassigned successfully' });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      if (err.message === 'Lead not found') {
+        return res.status(404).json({ message: err.message });
+      }
+      if (err.message === 'Target User not found') {
+        return res.status(404).json({ message: err.message });
+      }
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Reassign Error:', error.message);
+    res.status(500).json({ message: 'Server error reassigning lead' });
+  }
+};
+
+// @desc    Get lead reassignments history
+// @route   GET /api/leads/reassignments
+// @access  Private
+const getReassignments = async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        lr.id, lr.lead_id, lr.reason, lr.created_at,
+        l.name as lead_name,
+        u1.name as from_user_name,
+        u2.name as to_user_name,
+        u3.name as reassigned_by_name
+      FROM lead_reassignments lr
+      LEFT JOIN leads l ON lr.lead_id = l.id
+      LEFT JOIN users u1 ON lr.from_user = u1.id
+      LEFT JOIN users u2 ON lr.to_user = u2.id
+      LEFT JOIN users u3 ON lr.reassigned_by = u3.id
+      ORDER BY lr.created_at DESC
+    `;
+    const result = await pool.query(query);
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error('Get Reassignments Error:', error.message);
+    res.status(500).json({ message: 'Server error fetching reassignment logs' });
+  }
+};
+
 module.exports = {
   createLead,
   getLeads,
@@ -481,8 +665,7 @@ module.exports = {
   getLeadStats,
   deleteLead,
   getMonthlyStats,
-  getLeadAnalytics
+  getLeadAnalytics,
+  reassignLead,
+  getReassignments
 };
-
-
-

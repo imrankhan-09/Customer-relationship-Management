@@ -3,11 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api/api';
 import StatusBadge from '../../components/common/StatusBadge';
 import ActivityTimeline from '../../components/activities/ActivityTimeline';
-import { 
-  CheckCircleIcon, 
-  ArrowLeftIcon, 
-  PhoneIcon, 
-  EnvelopeIcon, 
+import {
+  CheckCircleIcon,
+  ArrowLeftIcon,
+  PhoneIcon,
+  EnvelopeIcon,
   MapPinIcon,
   IdentificationIcon,
   AcademicCapIcon,
@@ -16,11 +16,15 @@ import {
   ShoppingBagIcon
 } from '@heroicons/react/24/outline';
 import OpportunityManager from '../../components/sales/OpportunityManager';
+import QuotationManager from '../../components/sales/QuotationManager';
+import LeadReassign from '../../components/leads/LeadReassign';
 import { PIPELINE_STAGES, getStageLabel } from '../../utils/pipelineConstants';
+import { useAuth } from '../../context/AuthProvider';
 
 const LeadDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [lead, setLead] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -32,14 +36,14 @@ const LeadDetails = () => {
     setIsLoading(true);
     try {
       const response = await api.get(`/leads/${id}`);
-      
+
       if (!response.data || Object.keys(response.data).length === 0) {
         setLead(null);
         return;
       }
 
       let leadData = response.data;
-      
+
       // Parse extra_data if it's a string
       if (typeof leadData.extra_data === 'string') {
         try {
@@ -48,7 +52,7 @@ const LeadDetails = () => {
           leadData.extra_data = {};
         }
       }
-      
+
       setLead(leadData);
     } catch (err) {
       console.error('Error fetching lead details:', err);
@@ -71,14 +75,14 @@ const LeadDetails = () => {
     return (
       <div className="flex flex-col items-center justify-center py-40 animate-in fade-in zoom-in duration-300">
         <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mb-6 shadow-xl shadow-rose-100">
-           <IdentificationIcon className="w-10 h-10" />
+          <IdentificationIcon className="w-10 h-10" />
         </div>
         <h2 className="text-2xl font-black text-slate-900 mb-2">Lead Not Found</h2>
         <p className="text-slate-500 font-medium mb-8 max-w-xs text-center">
           The requested lead might have been removed or you don't have permission to view it.
         </p>
-        <button 
-          onClick={() => navigate(-1)} 
+        <button
+          onClick={() => navigate(-1)}
           className="px-8 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-600 transition-all active:scale-95 shadow-xl shadow-slate-200"
         >
           Return to Dashboard
@@ -92,7 +96,7 @@ const LeadDetails = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/40 backdrop-blur-md p-6 rounded-3xl border border-white/40 shadow-sm">
         <div className="flex items-center gap-4">
-          <button 
+          <button
             onClick={() => navigate(-1)}
             className="p-2 hover:bg-white rounded-xl transition-all text-slate-500 hover:text-blue-600 border border-transparent hover:border-slate-100"
           >
@@ -104,10 +108,17 @@ const LeadDetails = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
-           <StatusBadge status={lead.status} />
-           <div className="px-4 py-1.5 bg-slate-100 text-slate-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-slate-200">
-              Stage: {getStageLabel(lead.pipeline_stage)}
-           </div>
+          <StatusBadge status={lead.status} />
+          <div className="px-4 py-1.5 bg-slate-100 text-slate-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-slate-200">
+            Stage: {getStageLabel(lead.pipeline_stage)}
+          </div>
+          {(user?.role === 'admin' || user?.role === 'approver' || user?.permissions?.some(p => p.module === 'reassign' && p.can_create)) && (
+            <LeadReassign 
+              leadId={id} 
+              currentAssignee={lead.assigned_to} 
+              onReassignSuccess={fetchLeadDetails} 
+            />
+          )}
         </div>
       </div>
 
@@ -116,52 +127,52 @@ const LeadDetails = () => {
           {/* Main Info Card */}
           <div className="glass-card rounded-3xl p-8">
             <h3 className="text-lg font-bold text-slate-900 mb-8 flex items-center gap-2 border-b pb-4">
-               <IdentificationIcon className="w-5 h-5 text-blue-600" />
-               Lead Intelligence
+              <IdentificationIcon className="w-5 h-5 text-blue-600" />
+              Lead Intelligence
             </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-               <div className="space-y-6">
-                  <div className="flex items-center gap-4 group">
-                     <div className="p-3 bg-slate-50 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 rounded-2xl transition-all">
-                        <PhoneIcon className="w-5 h-5" />
-                     </div>
-                     <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Phone Number</p>
-                        <p className="font-bold text-slate-800">{lead.phone || 'Not Provided'}</p>
-                     </div>
-                  </div>
-                  <div className="flex items-center gap-4 group">
-                     <div className="p-3 bg-slate-50 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 rounded-2xl transition-all">
-                        <EnvelopeIcon className="w-5 h-5" />
-                     </div>
-                     <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email Address</p>
-                        <p className="font-bold text-slate-800">{lead.email || 'Not Provided'}</p>
-                     </div>
-                  </div>
-               </div>
 
-               <div className="space-y-6">
-                  <div className="flex items-center gap-4 group">
-                     <div className="p-3 bg-slate-50 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 rounded-2xl transition-all">
-                        <MapPinIcon className="w-5 h-5" />
-                     </div>
-                     <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Assigned Worker ID</p>
-                        <p className="font-bold text-slate-800">Worker #{lead.assigned_to || 'N/A'}</p>
-                     </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-6">
+                <div className="flex items-center gap-4 group">
+                  <div className="p-3 bg-slate-50 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 rounded-2xl transition-all">
+                    <PhoneIcon className="w-5 h-5" />
                   </div>
-                  <div className="flex items-center gap-4 group">
-                     <div className="p-3 bg-slate-50 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 rounded-2xl transition-all">
-                        <ClockIcon className="w-5 h-5" />
-                     </div>
-                     <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Last Updated</p>
-                        <p className="font-bold text-slate-800">{new Date(lead.updated_at).toLocaleString()}</p>
-                     </div>
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Phone Number</p>
+                    <p className="font-bold text-slate-800">{lead.phone || 'Not Provided'}</p>
                   </div>
-               </div>
+                </div>
+                <div className="flex items-center gap-4 group">
+                  <div className="p-3 bg-slate-50 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 rounded-2xl transition-all">
+                    <EnvelopeIcon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email Address</p>
+                    <p className="font-bold text-slate-800">{lead.email || 'Not Provided'}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="flex items-center gap-4 group">
+                  <div className="p-3 bg-slate-50 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 rounded-2xl transition-all">
+                    <MapPinIcon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Assigned Worker ID</p>
+                    <p className="font-bold text-slate-800">Worker #{lead.assigned_to || 'N/A'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 group">
+                  <div className="p-3 bg-slate-50 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 rounded-2xl transition-all">
+                    <ClockIcon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Last Updated</p>
+                    <p className="font-bold text-slate-800">{new Date(lead.updated_at).toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Extra Data Section */}
@@ -171,8 +182,8 @@ const LeadDetails = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   {Object.entries(lead.extra_data).map(([key, value]) => (
                     <div key={key} className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 group hover:bg-white hover:shadow-md transition-all">
-                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 group-hover:text-blue-600">{key.replace(/_/g, ' ')}</p>
-                       <p className="text-sm font-bold text-slate-700">{typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 group-hover:text-blue-600">{key.replace(/_/g, ' ')}</p>
+                      <p className="text-sm font-bold text-slate-700">{typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}</p>
                     </div>
                   ))}
                 </div>
@@ -181,53 +192,56 @@ const LeadDetails = () => {
 
             {/* Notes Section */}
             <div className="mt-12 p-6 bg-amber-50/50 rounded-3xl border border-amber-100">
-               <h4 className="text-xs font-black text-amber-700 uppercase tracking-widest mb-4 flex items-center gap-2">
-                  <BriefcaseIcon className="w-4 h-4" />
-                  Approver & Internal Notes
-               </h4>
-               <p className="text-slate-700 font-medium text-sm italic">
-                  {lead.notes || 'No internal notes added yet.'}
-               </p>
+              <h4 className="text-xs font-black text-amber-700 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <BriefcaseIcon className="w-4 h-4" />
+                Approver & Internal Notes
+              </h4>
+              <p className="text-slate-700 font-medium text-sm italic">
+                {lead.notes || 'No internal notes added yet.'}
+              </p>
             </div>
           </div>
+
+          {(user?.role === 'admin' || user?.role === 'approver' || user?.id === lead.assigned_to) && (
+            <QuotationManager leadId={id} onQuotationUpdate={fetchLeadDetails} />
+          )}
 
           <ActivityTimeline leadId={id} onActivityLogged={fetchLeadDetails} />
         </div>
 
         <div className="space-y-8">
-           {/* Status Roadmap */}
-           <div className="glass-card rounded-3xl p-8">
-              <h3 className="font-bold text-slate-900 mb-6 flex items-center gap-2">
-                 <ClockIcon className="w-5 h-5 text-indigo-600" />
-                 Pipeline Roadmap
-              </h3>
-              <div className="space-y-6">
-                 {PIPELINE_STAGES.map((stage, idx, arr) => {
-                   const isCompleted = arr.findIndex(s => s.id === lead.pipeline_stage) >= idx;
-                   const isCurrent = lead.pipeline_stage === stage.id;
-                   
-                   return (
-                     <div key={stage.id} className="flex items-center gap-4 relative">
-                        {idx !== arr.length - 1 && (
-                          <div className={`absolute left-[15px] top-[30px] w-0.5 h-[30px] ${isCompleted ? 'bg-emerald-500' : 'bg-slate-100'}`}></div>
-                        )}
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center z-10 transition-all ${
-                          isCompleted ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100' : 'bg-slate-100 text-slate-400'
-                        }`}>
-                           {isCompleted ? <CheckCircleIcon className="w-5 h-5" /> : <span className="text-xs font-bold">{idx + 1}</span>}
-                        </div>
-                        <div className="flex-1">
-                           <p className={`text-sm font-bold ${isCurrent ? 'text-indigo-600' : 'text-slate-600'}`}>{stage.label}</p>
-                           {isCurrent && <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Active Stage</p>}
-                        </div>
-                     </div>
-                   );
-                 })}
-              </div>
-           </div>
+          {/* Status Roadmap */}
+          <div className="glass-card rounded-3xl p-8">
+            <h3 className="font-bold text-slate-900 mb-6 flex items-center gap-2">
+              <ClockIcon className="w-5 h-5 text-indigo-600" />
+              Pipeline Roadmap
+            </h3>
+            <div className="space-y-6">
+              {PIPELINE_STAGES.map((stage, idx, arr) => {
+                const isCompleted = arr.findIndex(s => s.id === lead.pipeline_stage) >= idx;
+                const isCurrent = lead.pipeline_stage === stage.id;
 
-           {/* Opportunity & Product Management */}
-           <OpportunityManager leadId={id} leadStatus={lead.status} pipelineStage={lead.pipeline_stage} />
+                return (
+                  <div key={stage.id} className="flex items-center gap-4 relative">
+                    {idx !== arr.length - 1 && (
+                      <div className={`absolute left-[15px] top-[30px] w-0.5 h-[30px] ${isCompleted ? 'bg-emerald-500' : 'bg-slate-100'}`}></div>
+                    )}
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center z-10 transition-all ${isCompleted ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100' : 'bg-slate-100 text-slate-400'
+                      }`}>
+                      {isCompleted ? <CheckCircleIcon className="w-5 h-5" /> : <span className="text-xs font-bold">{idx + 1}</span>}
+                    </div>
+                    <div className="flex-1">
+                      <p className={`text-sm font-bold ${isCurrent ? 'text-indigo-600' : 'text-slate-600'}`}>{stage.label}</p>
+                      {isCurrent && <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Active Stage</p>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Opportunity & Product Management */}
+          <OpportunityManager leadId={id} leadStatus={lead.status} pipelineStage={lead.pipeline_stage} />
         </div>
       </div>
     </div>

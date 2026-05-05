@@ -64,103 +64,105 @@ const SubscriptionStatus = lazy(() => import('./pages/subscription/SubscriptionS
 const LeadsReport = lazy(() => import('./pages/reports/LeadsReport'));
 const SalesReport = lazy(() => import('./pages/reports/SalesReport'));
 const AppointmentReport = lazy(() => import('./pages/reports/AppointmentReport'));
+const NotificationHistory = lazy(() => import('./pages/notifications/NotificationHistory'));
 
 function App() {
   return (
     <BrowserRouter>
-      <NotificationProvider>
-        <AuthProvider>
-        <Suspense fallback={<Loader />}>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/" element={<Navigate to="/login" replace />} />
+      <AuthProvider>
+        <NotificationProvider>
+          <Suspense fallback={<Loader />}>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/" element={<Navigate to="/login" replace />} />
 
-            {/* Unified Dashboard (Accessible by any logged-in user) */}
-            <Route element={<ProtectedRoute />}>
-              <Route element={<Layout />}>
-                <Route path="/dashboard" element={<UnifiedDashboard />} />
-                <Route path="/leads/:id" element={<LeadDetails />} />
+              {/* Unified Dashboard (Accessible by any logged-in user) */}
+              <Route element={<ProtectedRoute />}>
+                <Route element={<Layout />}>
+                  <Route path="/dashboard" element={<UnifiedDashboard />} />
+                  <Route path="/leads/:id" element={<LeadDetails />} />
+                  <Route path="/notifications" element={<NotificationHistory />} />
+                </Route>
               </Route>
-            </Route>
 
-            {/* Admin Routes */}
-            <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
-              <Route element={<Layout />}>
-                <Route path="/admin-dashboard" element={<AdminDashboard />} />
-                <Route path="/admin/users" element={<UserManagement />} />
-                <Route path="/admin/leads" element={<AdminLeads />} />
-                <Route path="/admin/roles" element={<RoleManagement />} />
-                <Route path="/admin/permissions" element={<PermissionManagement />} />
-                <Route path="/admin/reports" element={<AdminReports />} />
+              {/* Admin Routes */}
+              <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+                <Route element={<Layout />}>
+                  <Route path="/admin-dashboard" element={<AdminDashboard />} />
+                  <Route path="/admin/users" element={<UserManagement />} />
+                  <Route path="/admin/leads" element={<AdminLeads />} />
+                  <Route path="/admin/roles" element={<RoleManagement />} />
+                  <Route path="/admin/permissions" element={<PermissionManagement />} />
+                  <Route path="/admin/reports" element={<AdminReports />} />
+                </Route>
               </Route>
-            </Route>
 
 
-            {/* Creator Routes */}
-            <Route element={<ProtectedRoute module="leads" action="create" />}>
-              <Route element={<Layout />}>
-                <Route path="/creator/dashboard" element={<UnifiedDashboard />} />
-                <Route path="/creator/create-lead" element={<CreateLead />} />
-                <Route path="/creator/my-leads" element={<MyLeads />} />
-                <Route path="/creator/edit-lead/:id" element={<EditLead />} />
+              {/* Creator Routes */}
+              <Route element={<ProtectedRoute module="leads" action="create" />}>
+                <Route element={<Layout />}>
+                  <Route path="/creator/dashboard" element={<UnifiedDashboard />} />
+                  <Route path="/creator/create-lead" element={<CreateLead />} />
+                  <Route path="/creator/my-leads" element={<MyLeads />} />
+                  <Route path="/creator/edit-lead/:id" element={<EditLead />} />
+                </Route>
               </Route>
-            </Route>
 
-            {/* Approver Routes */}
-            <Route element={<ProtectedRoute allowedRoles={['approver']} />}>
-              <Route element={<Layout />}>
-                <Route path="/approver/dashboard" element={<UnifiedDashboard />} />
-                <Route path="/approver/assign-leads" element={<AssignLeads />} />
-                <Route path="/approver/pending-leads" element={<PendingLeads />} />
-                <Route path="/approver/verified-leads" element={<ApprovedLeads />} />
-                <Route path="/approver/assigned-leads" element={<ApproverAssignedLeads />} />
-                <Route path="/approver/track-lead/:id" element={<LeadTracking />} />
+              {/* Approver Routes */}
+              <Route element={<ProtectedRoute allowedRoles={['approver']} />}>
+                <Route element={<Layout />}>
+                  <Route path="/approver/dashboard" element={<UnifiedDashboard />} />
+                  <Route path="/approver/assign-leads" element={<AssignLeads />} />
+                  <Route path="/approver/pending-leads" element={<PendingLeads />} />
+                  <Route path="/approver/verified-leads" element={<ApprovedLeads />} />
+                  <Route path="/approver/assigned-leads" element={<ApproverAssignedLeads />} />
+                  <Route path="/approver/track-lead/:id" element={<LeadTracking />} />
+                </Route>
               </Route>
-            </Route>
 
-            {/* Worker Routes */}
-            <Route element={<ProtectedRoute allowedRoles={['worker']} />}>
-              <Route element={<Layout />}>
-                <Route path="/worker/dashboard" element={<UnifiedDashboard />} />
-                <Route path="/worker/assigned-leads" element={<AssignedLeads />} />
-                <Route path="/worker/follow-ups" element={<FollowUps />} />
-                <Route path="/worker/lead/:id" element={<LeadDetails />} />
+              {/* Worker Routes */}
+              <Route element={<ProtectedRoute allowedRoles={['worker']} />}>
+                <Route element={<Layout />}>
+                  <Route path="/worker/dashboard" element={<UnifiedDashboard />} />
+                  <Route path="/worker/assigned-leads" element={<AssignedLeads />} />
+                  <Route path="/worker/follow-ups" element={<FollowUps />} />
+                  <Route path="/worker/lead/:id" element={<LeadDetails />} />
+                </Route>
               </Route>
-            </Route>
 
-            {/* Restricted Common Modules */}
-            <Route element={<ProtectedRoute allowedRoles={['approver', 'worker']} />}>
-              <Route element={<Layout />}>
-                <Route path="/doctors" element={<DoctorList />} />
-                <Route path="/doctors/:id" element={<DoctorProfile />} />
-                <Route path="/doctors/:id/schedule" element={<DoctorSchedule />} />
-                <Route path="/patients/:id" element={<PatientProfile />} />
-                <Route path="/patients/:id/reports" element={<PatientReports />} />
-                <Route path="/lab" element={<LabDashboard />} />
-                <Route path="/lab/catalog" element={<TestCatalog />} />
-                <Route path="/lab/booking" element={<TestBooking />} />
-                <Route path="/lab/reports" element={<LabReports />} />
-                <Route path="/pharmacy/inventory" element={<Inventory />} />
-                <Route path="/pharmacy/billing" element={<Billing />} />
-                <Route path="/subscription/plans" element={<Plans />} />
-                <Route path="/subscription/status" element={<SubscriptionStatus />} />
+              {/* Restricted Common Modules */}
+              <Route element={<ProtectedRoute allowedRoles={['approver', 'worker']} />}>
+                <Route element={<Layout />}>
+                  <Route path="/doctors" element={<DoctorList />} />
+                  <Route path="/doctors/:id" element={<DoctorProfile />} />
+                  <Route path="/doctors/:id/schedule" element={<DoctorSchedule />} />
+                  <Route path="/patients/:id" element={<PatientProfile />} />
+                  <Route path="/patients/:id/reports" element={<PatientReports />} />
+                  <Route path="/lab" element={<LabDashboard />} />
+                  <Route path="/lab/catalog" element={<TestCatalog />} />
+                  <Route path="/lab/booking" element={<TestBooking />} />
+                  <Route path="/lab/reports" element={<LabReports />} />
+                  <Route path="/pharmacy/inventory" element={<Inventory />} />
+                  <Route path="/pharmacy/billing" element={<Billing />} />
+                  <Route path="/subscription/plans" element={<Plans />} />
+                  <Route path="/subscription/status" element={<SubscriptionStatus />} />
+                </Route>
               </Route>
-            </Route>
 
-            {/* Reports Modules */}
-            <Route element={<ProtectedRoute module="reports" action="view" />}>
-              <Route element={<Layout />}>
-                <Route path="/reports/leads" element={<LeadsReport />} />
-                <Route path="/reports/sales" element={<SalesReport />} />
-                <Route path="/reports/appointments" element={<AppointmentReport />} />
+              {/* Reports Modules */}
+              <Route element={<ProtectedRoute module="reports" action="view" />}>
+                <Route element={<Layout />}>
+                  <Route path="/reports/leads" element={<LeadsReport />} />
+                  <Route path="/reports/sales" element={<SalesReport />} />
+                  <Route path="/reports/appointments" element={<AppointmentReport />} />
+                </Route>
               </Route>
-            </Route>
-          </Routes>
-        </Suspense>
+            </Routes>
+          </Suspense>
+        </NotificationProvider>
       </AuthProvider>
-      </NotificationProvider>
     </BrowserRouter>
   );
 }
