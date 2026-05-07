@@ -30,7 +30,7 @@ const CreateLead = () => {
   const [extraData, setExtraData] = useState({});
 
   const leadTypes = [
-    { id: 'doctor', name: 'Doctor', icon: UserIcon },
+    { id: 'doctor', name: 'Professional', icon: UserIcon },
     { id: 'patient', name: 'Patient', icon: IdentificationIcon },
     { id: 'lab', name: 'Lab', icon: BeakerIcon },
     { id: 'pharmacy', name: 'Pharmacy', icon: ShoppingBagIcon },
@@ -40,7 +40,7 @@ const CreateLead = () => {
   // Dynamic field definitions
   const dynamicFields = {
     doctor: [
-      { name: 'doctor_name', label: 'Doctor Full Name', type: 'text' },
+      { name: 'doctor_name', label: 'Professional Full Name', type: 'text' },
       { name: 'clinic_name', label: 'Clinic/Hospital Name', type: 'text' },
       { name: 'specialization', label: 'Specialization', type: 'text' },
       { name: 'qualification', label: 'Qualification', type: 'text' },
@@ -177,14 +177,14 @@ const CreateLead = () => {
           </div>
           <div>
             <h2 className="text-3xl font-black text-slate-900">Lead Created Successfully!</h2>
-            <p className="text-emerald-700 font-medium">The new {type} lead has been added to your database.</p>
+            <p className="text-emerald-700 font-medium">The new {leadTypes.find(t => t.id === type)?.name || type} lead has been added to your database.</p>
           </div>
         </div>
 
         <div className="glass-card rounded-3xl overflow-hidden">
           <div className="p-8 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
             <h3 className="text-xl font-bold text-slate-900">Lead Summary</h3>
-            <span className="px-4 py-1 bg-blue-100 text-blue-600 rounded-full text-xs font-black uppercase tracking-widest">{type}</span>
+            <span className="px-4 py-1 bg-blue-100 text-blue-600 rounded-full text-xs font-black uppercase tracking-widest">{leadTypes.find(t => t.id === type)?.name || type}</span>
           </div>
           <div className="p-8 space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -360,7 +360,7 @@ const CreateLead = () => {
         <div className="glass-card rounded-3xl p-8">
           <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
             <span className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center text-sm">3</span>
-            {type.charAt(0).toUpperCase() + type.slice(1)} Specific Details
+            {(leadTypes.find(t => t.id === type)?.name || type)} Specific Details
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {dynamicFields[type].map((field) => (

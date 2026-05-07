@@ -1,4 +1,4 @@
-// src/pages/doctor/DoctorSchedule.jsx
+// src/pages/professional/ProfessionalSchedule.jsx
 import React from 'react';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -11,7 +11,7 @@ const dummyAppointments = {
   '2024-03-21': { '11:00 AM': 'Robert Brown', '03:00 PM': 'Lisa Ray' },
 };
 
-const DoctorSchedule = () => {
+const ProfessionalSchedule = () => {
   const { id } = useParams();
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState('2024-03-20');
@@ -31,7 +31,7 @@ const DoctorSchedule = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-800">Doctor Schedule</h1>
+        <h1 className="text-2xl font-bold text-gray-800">Professional Schedule</h1>
         <div className="flex items-center gap-2">
           <button onClick={() => setCurrentWeek(new Date(currentWeek.setDate(currentWeek.getDate() - 7)))} className="p-2 hover:bg-gray-100 rounded-lg"><ChevronLeftIcon className="w-5 h-5" /></button>
           <span className="font-medium">{currentWeek.toLocaleDateString('default', { month: 'long', year: 'numeric' })}</span>
@@ -60,7 +60,7 @@ const DoctorSchedule = () => {
                     {appointment ? (
                       <span className="font-medium text-green-800">{appointment}</span>
                     ) : (
-                      <button className="text-blue-600 hover:underline text-xs">Book</button>
+                      <button className="text-blue-600 hover:underline text-xs">Reserve</button>
                     )}
                   </div>
                 );
@@ -73,4 +73,4 @@ const DoctorSchedule = () => {
   );
 };
 
-export default DoctorSchedule;
+export default ProfessionalSchedule;

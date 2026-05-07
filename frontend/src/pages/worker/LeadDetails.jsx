@@ -104,7 +104,7 @@ const LeadDetails = () => {
           </button>
           <div>
             <h1 className="text-2xl font-bold text-slate-900">{lead.name}</h1>
-            <p className="text-slate-500 text-sm font-medium uppercase tracking-widest text-[10px]">{lead.type} Prospect</p>
+            <p className="text-slate-500 text-sm font-medium uppercase tracking-widest text-[10px]">{lead.type === 'doctor' ? 'Professional' : lead.type} Prospect</p>
           </div>
         </div>
         <div className="flex items-center gap-3">

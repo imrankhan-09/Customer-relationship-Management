@@ -166,7 +166,7 @@ const updateUser = async (req, res) => {
     );
 
     const user = result.rows[0];
-    
+
     // Handle custom permissions if provided
     if (permissions && Array.isArray(permissions)) {
       // Clear existing custom permissions first (or upsert)
@@ -521,9 +521,9 @@ const updateRolePermissions = async (req, res) => {
     try {
       const roleNameResult = await pool.query('SELECT role_name FROM roles WHERE id = $1', [roleId]);
       const roleName = roleNameResult.rows[0]?.role_name || 'your role';
-      
+
       const affectedUsers = await pool.query('SELECT id FROM users WHERE role_id = $1', [roleId]);
-      
+
       for (const affectedUser of affectedUsers.rows) {
         const notification = await createNotification({
           title: 'Role Permissions Updated',
@@ -533,7 +533,7 @@ const updateRolePermissions = async (req, res) => {
           redirect_url: '/dashboard', // General redirect
           sender_id: req.user.id
         });
-        
+
         if (notification && req.sendNotification) {
           req.sendNotification(affectedUser.id, notification);
         }
@@ -620,7 +620,7 @@ const updateUserPermissions = async (req, res) => {
         redirect_url: '/dashboard',
         sender_id: req.user.id
       });
-      
+
       if (notification && req.sendNotification) {
         req.sendNotification(userId, notification);
       }

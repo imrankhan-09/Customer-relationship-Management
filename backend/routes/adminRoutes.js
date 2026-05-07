@@ -26,7 +26,7 @@ const {
   getLoginStats,
   getRecentLogins
 } = require('../controllers/adminController');
-const { getLiveLocations, getLocationHistory } = require('../controllers/locationController');
+const { getLiveLocations, getLocationHistory, getGeofences } = require('../controllers/locationController');
 
 // All admin routes require authentication
 router.use(protect);
@@ -69,5 +69,6 @@ router.get('/recent-logins', checkRole('admin'), getRecentLogins);
 // ==================== LOCATION TRACKING ====================
 router.get('/live-locations', checkRole('admin'), getLiveLocations);
 router.get('/location-history/:user_id', checkRole('admin'), getLocationHistory);
+router.get('/geofences', checkRole('admin'), getGeofences);
 
 module.exports = router;

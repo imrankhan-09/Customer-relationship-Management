@@ -93,9 +93,9 @@ const Sidebar = () => {
       show: user?.role === 'worker' 
     },
     { 
-      to: '/doctors', 
+      to: '/professionals', 
       icon: UserIcon, 
-      label: 'Doctors', 
+      label: 'Professionals', 
       show: user?.role === 'worker' || user?.role === 'approver'
     },
     { 

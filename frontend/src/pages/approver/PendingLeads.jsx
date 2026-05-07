@@ -281,7 +281,7 @@ const PendingLeads = () => {
             className="w-full pl-11 pr-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
           >
             <option value="all">All Categories</option>
-            <option value="doctor">Doctors</option>
+            <option value="doctor">Professionals</option>
             <option value="patient">Patients</option>
             <option value="lab">Labs</option>
             <option value="pharmacy">Pharmacies</option>

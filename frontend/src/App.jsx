@@ -135,9 +135,9 @@ function App() {
               {/* Restricted Common Modules */}
               <Route element={<ProtectedRoute allowedRoles={['approver', 'worker']} />}>
                 <Route element={<Layout />}>
-                  <Route path="/doctors" element={<DoctorList />} />
-                  <Route path="/doctors/:id" element={<DoctorProfile />} />
-                  <Route path="/doctors/:id/schedule" element={<DoctorSchedule />} />
+                  <Route path="/professionals" element={<DoctorList />} />
+                  <Route path="/professionals/:id" element={<DoctorProfile />} />
+                  <Route path="/professionals/:id/schedule" element={<DoctorSchedule />} />
                   <Route path="/patients/:id" element={<PatientProfile />} />
                   <Route path="/patients/:id/reports" element={<PatientReports />} />
                   <Route path="/lab" element={<LabDashboard />} />

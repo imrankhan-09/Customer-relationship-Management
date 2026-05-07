@@ -116,7 +116,7 @@ const MyLeads = () => {
   const getTypeIcon = (type, large = false) => {
     const size = large ? "w-12 h-12 text-xl" : "p-2 text-xs";
     switch (type) {
-      case 'doctor': return <span className={`${size} bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center font-bold`}>DR</span>;
+      case 'doctor': return <span className={`${size} bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center font-bold`}>PR</span>;
       case 'patient': return <span className={`${size} bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center font-bold`}>PT</span>;
       case 'lab': return <span className={`${size} bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center font-bold`}>LB</span>;
       case 'pharmacy': return <span className={`${size} bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center font-bold`}>PH</span>;
@@ -138,7 +138,7 @@ const MyLeads = () => {
                 {getTypeIcon(selectedLead.type, true)}
                 <div>
                   <h2 className="text-2xl font-black text-slate-900">{selectedLead.name}</h2>
-                  <p className="text-slate-500 font-bold uppercase tracking-wider text-xs">{selectedLead.type} Lead</p>
+                  <p className="text-slate-500 font-bold uppercase tracking-wider text-xs">{selectedLead.type === 'doctor' ? 'Professional' : selectedLead.type} Lead</p>
                 </div>
               </div>
               <button 
@@ -307,7 +307,7 @@ const MyLeads = () => {
             className="w-full pl-11 pr-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer text-sm"
           >
             <option value="all">All Types</option>
-            <option value="doctor">Doctors</option>
+            <option value="doctor">Professionals</option>
             <option value="patient">Patients</option>
             <option value="lab">Labs</option>
             <option value="pharmacy">Pharmacies</option>
@@ -382,6 +382,9 @@ const MyLeads = () => {
                 </div>
 
                 <div className="flex items-center gap-4">
+                  <span className="px-3 py-1 bg-white border border-slate-100 text-slate-600 rounded-lg text-xs font-bold uppercase tracking-wider">
+                    {lead.type === 'doctor' ? 'Professional' : lead.type}
+                  </span>
                   <div className={`px-4 py-1.5 rounded-full border text-xs font-black uppercase tracking-wider ${getStatusColor(lead.status)}`}>
                     {lead.status}
                   </div>

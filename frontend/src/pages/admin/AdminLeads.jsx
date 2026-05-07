@@ -56,7 +56,7 @@ const AdminLeads = () => {
                 leads.map((lead) => (
                   <tr key={lead.id}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{lead.name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">{lead.type || 'N/A'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">{lead.type === 'doctor' ? 'Professional' : (lead.type || 'N/A')}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">{lead.status || 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">{lead.pipeline_stage || 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{lead.creator_name || 'N/A'}</td>

@@ -63,7 +63,7 @@ const EditLead = () => {
   }, [id, navigate]);
 
   const leadTypes = [
-    { id: 'doctor', name: 'Doctor', icon: UserIcon },
+    { id: 'doctor', name: 'Professional', icon: UserIcon },
     { id: 'patient', name: 'Patient', icon: IdentificationIcon },
     { id: 'lab', name: 'Lab', icon: BeakerIcon },
     { id: 'pharmacy', name: 'Pharmacy', icon: ShoppingBagIcon },
@@ -73,7 +73,7 @@ const EditLead = () => {
   // Dynamic field definitions
   const dynamicFields = {
     doctor: [
-      { name: 'doctor_name', label: 'Doctor Full Name', type: 'text' },
+      { name: 'doctor_name', label: 'Professional Full Name', type: 'text' },
       { name: 'clinic_name', label: 'Clinic/Hospital Name', type: 'text' },
       { name: 'specialization', label: 'Specialization', type: 'text' },
       { name: 'qualification', label: 'Qualification', type: 'text' },
@@ -210,7 +210,7 @@ const EditLead = () => {
                    onChange={(e) => setType(e.target.value)}
                    className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                  >
-                   <option value="doctor">Doctor</option>
+                   <option value="doctor">Professional</option>
                    <option value="patient">Patient</option>
                    <option value="lab">Lab</option>
                    <option value="pharmacy">Pharmacy</option>
@@ -369,7 +369,7 @@ const EditLead = () => {
 
         {/* Dynamic Fields */}
         <div className="glass-card rounded-3xl p-8">
-          <h3 className="text-lg font-bold text-slate-900 mb-6">Type Specific Details ({type})</h3>
+          <h3 className="text-lg font-bold text-slate-900 mb-6">Type Specific Details ({leadTypes.find(t => t.id === type)?.name || type})</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {dynamicFields[type]?.map((field) => (
               <div key={field.name} className={`space-y-2 ${field.type === 'textarea' ? 'md:col-span-2 lg:col-span-3' : ''}`}>

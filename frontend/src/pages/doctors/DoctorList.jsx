@@ -1,28 +1,28 @@
-// src/pages/doctor/DoctorList.jsx
+// src/pages/professional/ProfessionalList.jsx
 import React from 'react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
-const dummyDoctors = [
-  { id: 1, name: 'Dr. Sarah Johnson', specialization: 'Cardiology', qualification: 'MD', experience: 12, available: true },
-  { id: 2, name: 'Dr. Michael Chen', specialization: 'Neurology', qualification: 'MD, PhD', experience: 18, available: false },
+const dummyProfessionals = [
+  { id: 1, name: 'Sarah Johnson', specialization: 'Consultant', qualification: 'Expert', experience: 12, available: true },
+  { id: 2, name: 'Michael Chen', specialization: 'Strategist', qualification: 'Specialist', experience: 18, available: false },
 ];
 
-const DoctorList = () => {
+const ProfessionalList = () => {
   const [search, setSearch] = useState('');
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Doctors</h1>
+        <h1 className="text-2xl font-bold">Professionals</h1>
         <div className="relative">
           <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10 pr-4 py-2 rounded-xl border" />
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {dummyDoctors.filter(d => d.name.toLowerCase().includes(search.toLowerCase())).map(doc => (
-          <Link key={doc.id} to={`/doctors/${doc.id}`} className="bg-white rounded-xl shadow-sm border p-5 hover:shadow-md transition">
+        {dummyProfessionals.filter(d => d.name.toLowerCase().includes(search.toLowerCase())).map(doc => (
+          <Link key={doc.id} to={`/professionals/${doc.id}`} className="bg-white rounded-xl shadow-sm border p-5 hover:shadow-md transition">
             <h3 className="font-semibold text-lg">{doc.name}</h3>
             <p className="text-gray-600">{doc.specialization}</p>
             <p className="text-sm text-gray-500">{doc.qualification} • {doc.experience} yrs</p>
@@ -36,4 +36,4 @@ const DoctorList = () => {
   );
 };
 
-export default DoctorList;
+export default ProfessionalList;

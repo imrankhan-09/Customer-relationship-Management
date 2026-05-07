@@ -177,7 +177,10 @@ const UnifiedDashboard = () => {
   const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#6366F1'];
 
   const pieData = statsData.byType?.length > 0
-    ? statsData.byType.map(item => ({ name: item.type.toUpperCase(), value: parseInt(item.value) }))
+    ? statsData.byType.map(item => ({ 
+        name: item.type === 'doctor' ? 'PROFESSIONAL' : item.type.toUpperCase(), 
+        value: parseInt(item.value) 
+      }))
     : [{ name: 'NO DATA', value: 1 }];
 
   if (isLoading) {
@@ -415,7 +418,7 @@ const UnifiedDashboard = () => {
                   <div>
                     <p className="font-black text-slate-900 group-hover:text-blue-600 transition-colors tracking-tight">{lead.name}</p>
                     <div className="flex items-center gap-2 mt-1">
-                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-0.5 rounded-full">{lead.type}</span>
+                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-0.5 rounded-full">{lead.type === 'doctor' ? 'Professional' : lead.type}</span>
                        <span className="text-[9px] font-bold text-slate-400">• {new Date(lead.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>

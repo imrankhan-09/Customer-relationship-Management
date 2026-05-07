@@ -136,7 +136,7 @@ const LeadsReport = () => {
         const tableRows = data.leads.map(lead => [
           new Date(lead.created_at).toLocaleDateString(),
           lead.name,
-          lead.type || 'N/A',
+          lead.type === 'doctor' ? 'Professional' : (lead.type || 'N/A'),
           (lead.status === 'approved' && lead.assigned_to) ? 'assigned' : lead.status
         ]);
         autoTable(doc, { startY: 94, head: [tableColumn], body: tableRows });
@@ -318,7 +318,7 @@ const LeadsReport = () => {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                       <h4 className="font-bold text-slate-800 text-lg">{lead.name}</h4>
-                      <p className="text-xs font-medium text-slate-500 uppercase tracking-widest">{lead.type} Lead</p>
+                      <p className="text-xs font-medium text-slate-500 uppercase tracking-widest">{lead.type === 'doctor' ? 'Professional' : lead.type} Lead</p>
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="px-3 py-1 bg-slate-100 text-slate-700 text-xs font-bold uppercase rounded-lg border border-slate-200">
